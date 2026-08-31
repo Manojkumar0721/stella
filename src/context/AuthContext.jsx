@@ -164,112 +164,110 @@ export function AuthProvider({ children }) {
     return profile;
   };
 
-  // Sign in (Enforces prior user registration)
+  // Sign in (Strictly enforces prior user registration)
   const signIn = async (email, password) => {
     const cleanEmail = email.trim().toLowerCase();
     const userId = makeUserId(cleanEmail);
-    const isLocal = isEmailRegisteredLocally(cleanEmail);
 
-    // 1. Try Firebase Auth sign in
+    if (!cleanEmail || !password) {
+      throw new Error('Please enter both email and password.');
+    }
+
+    // Step 1: Check if user exists in local registry
+    const savedRegistry = (() => {
+      try {
+        return JSON.parse(localStorage.getItem(LOCAL_REGISTRY_KEY) || '[]');
+      } catch {
+        return [];
+      }
+    })();
+
+    const localUser = savedRegistry.find(u => u && u.email && u.email.trim().toLowerCase() === cleanEmail);
+
+    // Step 2: Check Firestore if not found in local registry
+    let firestoreUser = null;
+    if (!localUser) {
+      try {
+        const docSnap = await getDoc(doc(db, 'users', userId));
+        if (docSnap.exists()) {
+          firestoreUser = docSnap.data();
+        }
+      } catch (err) {
+        console.warn("Firestore query note:", err);
+      }
+    }
+
+    // Step 3: Try Firebase Auth sign in
     let firebaseUser = null;
-    let authErr = null;
-
+    let authError = null;
     try {
       const res = await signInWithEmailAndPassword(auth, cleanEmail, password);
       firebaseUser = res.user;
     } catch (err) {
-      authErr = err;
+      authError = err;
     }
 
+    // Step 4: Determine registration status
+    const isRegistered = !!(localUser || firestoreUser || firebaseUser);
+
+    if (!isRegistered) {
+      // User is NOT registered anywhere! Force redirect to registration page!
+      const notRegErr = new Error('USER_NOT_REGISTERED');
+      notRegErr.code = 'USER_NOT_REGISTERED';
+      throw notRegErr;
+    }
+
+    // Step 5: User IS registered. Now verify password!
     if (firebaseUser) {
       let cloudProfile = await fetchUserProfileQuick(firebaseUser.uid);
       if (!cloudProfile) {
         const usernameFromEmail = cleanEmail.split('@')[0];
-        let fullDisplayName = usernameFromEmail;
-        try {
-          const saved = JSON.parse(localStorage.getItem(LOCAL_REGISTRY_KEY) || '[]');
-          const found = saved.find(u => u.email?.toLowerCase() === cleanEmail || u.uid === firebaseUser.uid);
-          if (found && found.displayName) fullDisplayName = found.displayName;
-        } catch {}
-
         cloudProfile = {
           uid: firebaseUser.uid,
           email: cleanEmail,
           username: usernameFromEmail,
-          displayName: fullDisplayName,
+          displayName: firebaseUser.displayName || (localUser ? localUser.displayName : usernameFromEmail),
           avatarUrl: firebaseUser.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${usernameFromEmail}`,
           createdAt: new Date().toISOString()
         };
       }
-
       setCurrentUser(firebaseUser);
       setUserProfile(cloudProfile);
       saveUserToRegistry(cloudProfile);
       return cloudProfile;
     }
 
-    // 2. Handle Firebase error cases
-    if (authErr) {
-      if (authErr.code === 'auth/user-not-found') {
-        const notRegErr = new Error('USER_NOT_REGISTERED');
-        notRegErr.code = 'USER_NOT_REGISTERED';
-        throw notRegErr;
-      }
-
-      if (authErr.code === 'auth/invalid-credential' || authErr.code === 'auth/wrong-password') {
-        let inFirestore = false;
-        try {
-          const docSnap = await getDoc(doc(db, 'users', userId));
-          if (docSnap.exists()) inFirestore = true;
-        } catch {}
-
-        if (!isLocal && !inFirestore) {
-          const notRegErr = new Error('USER_NOT_REGISTERED');
-          notRegErr.code = 'USER_NOT_REGISTERED';
-          throw notRegErr;
-        }
-
-        const saved = JSON.parse(localStorage.getItem(LOCAL_REGISTRY_KEY) || '[]');
-        const localUser = saved.find(u => u.email?.toLowerCase() === cleanEmail);
-
-        if (localUser) {
-          if (localUser.password && localUser.password !== password) {
-            const wrongErr = new Error('Incorrect password. Please try again.');
-            wrongErr.code = 'WRONG_PASSWORD';
-            throw wrongErr;
-          }
-
-          setCurrentUser(localUser);
-          setUserProfile(localUser);
-          return localUser;
-        }
-
+    // Check local registry user password
+    if (localUser) {
+      if (localUser.password && localUser.password !== password) {
         const wrongErr = new Error('Incorrect password. Please try again.');
         wrongErr.code = 'WRONG_PASSWORD';
         throw wrongErr;
       }
+
+      setCurrentUser(localUser);
+      setUserProfile(localUser);
+      return localUser;
     }
 
-    // 3. Fallback check for local offline registry
-    if (isLocal) {
-      const saved = JSON.parse(localStorage.getItem(LOCAL_REGISTRY_KEY) || '[]');
-      const localUser = saved.find(u => u.email?.toLowerCase() === cleanEmail);
-      if (localUser) {
-        if (localUser.password && localUser.password !== password) {
-          const wrongErr = new Error('Incorrect password. Please try again.');
-          wrongErr.code = 'WRONG_PASSWORD';
-          throw wrongErr;
-        }
-        setCurrentUser(localUser);
-        setUserProfile(localUser);
-        return localUser;
+    // Check firestore user
+    if (firestoreUser) {
+      if (firestoreUser.password && firestoreUser.password !== password) {
+        const wrongErr = new Error('Incorrect password. Please try again.');
+        wrongErr.code = 'WRONG_PASSWORD';
+        throw wrongErr;
       }
+
+      setCurrentUser(firestoreUser);
+      setUserProfile(firestoreUser);
+      saveUserToRegistry(firestoreUser);
+      return firestoreUser;
     }
 
-    // If not registered anywhere, throw registration requirement
-    const notRegErr = new Error('USER_NOT_REGISTERED');
-    notRegErr.code = 'USER_NOT_REGISTERED';
-    throw notRegErr;
+    // Password incorrect for registered user
+    const wrongErr = new Error('Incorrect password. Please try again.');
+    wrongErr.code = 'WRONG_PASSWORD';
+    throw wrongErr;
   };
 
   // Logout
