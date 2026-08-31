@@ -46,6 +46,17 @@ export function saveUserToRegistry(profile) {
   }
 }
 
+export function isEmailRegisteredLocally(email) {
+  if (!email) return false;
+  try {
+    const cleanEmail = email.trim().toLowerCase();
+    const saved = JSON.parse(localStorage.getItem(LOCAL_REGISTRY_KEY) || '[]');
+    return saved.some(u => u.email?.toLowerCase() === cleanEmail);
+  } catch {
+    return false;
+  }
+}
+
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(() => {
     try {
@@ -100,88 +111,165 @@ export function AuthProvider({ children }) {
     }
   };
 
-const makeUserId = (email) => `usr_${email.trim().toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+  const makeUserId = (email) => `usr_${email.trim().toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
 
-// Sign up with Gmail/Email, Password, and Full Name (Instant Zero-Delay Registration & Login)
+  // Sign up with Gmail/Email, Password, and Full Name
   const signUp = async (email, password, displayName) => {
     const cleanEmail = email.trim().toLowerCase();
     const cleanUsername = cleanEmail.split('@')[0].toLowerCase();
     const cleanDisplay = displayName.trim() || cleanUsername;
-    const userId = makeUserId(cleanEmail);
+
+    // Check if already registered locally
+    if (isEmailRegisteredLocally(cleanEmail)) {
+      const err = new Error('ALREADY_REGISTERED');
+      err.code = 'ALREADY_REGISTERED';
+      throw err;
+    }
+
+    let firebaseUid = null;
+    try {
+      const res = await createUserWithEmailAndPassword(auth, cleanEmail, password);
+      firebaseUid = res.user.uid;
+    } catch (err) {
+      if (err.code === 'auth/email-already-in-use') {
+        const alreadyErr = new Error('ALREADY_REGISTERED');
+        alreadyErr.code = 'ALREADY_REGISTERED';
+        throw alreadyErr;
+      }
+    }
+
+    const userId = firebaseUid || makeUserId(cleanEmail);
 
     const profile = {
       uid: userId,
       email: cleanEmail,
       username: cleanUsername,
       displayName: cleanDisplay,
+      password: password,
       avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${cleanUsername}`,
       createdAt: new Date().toISOString()
     };
 
-    // INSTANT UI REGISTRATION & LOGIN TRANSITION (0ms latency!)
+    // Save profile to Firestore
+    try {
+      await setDoc(doc(db, 'users', userId), profile).catch(() => {});
+    } catch (err) {
+      console.warn("Firestore registration note:", err);
+    }
+
     setCurrentUser(profile);
     setUserProfile(profile);
     saveUserToRegistry(profile);
 
-    // Asynchronously create Auth credentials and save to Firestore in background
-    (async () => {
-      try {
-        const res = await createUserWithEmailAndPassword(auth, cleanEmail, password);
-        const cloudProfile = { ...profile, uid: res.user.uid };
-        await setDoc(doc(db, 'users', res.user.uid), cloudProfile).catch(() => {});
-      } catch (err) {
-        console.warn("Cloud registration background sync note:", err);
-      }
-    })();
-
     return profile;
   };
 
-  // Sign in (Instant Zero-Delay Login)
+  // Sign in (Enforces prior user registration)
   const signIn = async (email, password) => {
     const cleanEmail = email.trim().toLowerCase();
-    const usernameFromEmail = cleanEmail.split('@')[0];
     const userId = makeUserId(cleanEmail);
+    const isLocal = isEmailRegisteredLocally(cleanEmail);
 
-    let fullDisplayName = usernameFromEmail;
+    // 1. Try Firebase Auth sign in
+    let firebaseUser = null;
+    let authErr = null;
+
     try {
-      const saved = JSON.parse(localStorage.getItem(LOCAL_REGISTRY_KEY) || '[]');
-      const found = saved.find(u => u.email?.toLowerCase() === cleanEmail || u.uid === userId);
-      if (found && found.displayName && found.displayName !== usernameFromEmail) {
-        fullDisplayName = found.displayName;
+      const res = await signInWithEmailAndPassword(auth, cleanEmail, password);
+      firebaseUser = res.user;
+    } catch (err) {
+      authErr = err;
+    }
+
+    if (firebaseUser) {
+      let cloudProfile = await fetchUserProfileQuick(firebaseUser.uid);
+      if (!cloudProfile) {
+        const usernameFromEmail = cleanEmail.split('@')[0];
+        let fullDisplayName = usernameFromEmail;
+        try {
+          const saved = JSON.parse(localStorage.getItem(LOCAL_REGISTRY_KEY) || '[]');
+          const found = saved.find(u => u.email?.toLowerCase() === cleanEmail || u.uid === firebaseUser.uid);
+          if (found && found.displayName) fullDisplayName = found.displayName;
+        } catch {}
+
+        cloudProfile = {
+          uid: firebaseUser.uid,
+          email: cleanEmail,
+          username: usernameFromEmail,
+          displayName: fullDisplayName,
+          avatarUrl: firebaseUser.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${usernameFromEmail}`,
+          createdAt: new Date().toISOString()
+        };
       }
-    } catch {}
 
-    const quickProfile = {
-      uid: userId,
-      email: cleanEmail,
-      username: usernameFromEmail,
-      displayName: fullDisplayName,
-      avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${usernameFromEmail}`,
-      createdAt: new Date().toISOString()
-    };
+      setCurrentUser(firebaseUser);
+      setUserProfile(cloudProfile);
+      saveUserToRegistry(cloudProfile);
+      return cloudProfile;
+    }
 
-    // INSTANT UI LOGIN TRANSITION (0ms latency!)
-    setCurrentUser(quickProfile);
-    setUserProfile(quickProfile);
-    saveUserToRegistry(quickProfile);
+    // 2. Handle Firebase error cases
+    if (authErr) {
+      if (authErr.code === 'auth/user-not-found') {
+        const notRegErr = new Error('USER_NOT_REGISTERED');
+        notRegErr.code = 'USER_NOT_REGISTERED';
+        throw notRegErr;
+      }
 
-    // Asynchronous Cloud Sign-In
-    (async () => {
-      try {
-        const res = await signInWithEmailAndPassword(auth, cleanEmail, password);
-        setCurrentUser(res.user);
-        const cloudProfile = await fetchUserProfileQuick(res.user.uid);
-        if (cloudProfile) {
-          if (res.user.photoURL) cloudProfile.avatarUrl = res.user.photoURL;
-          setUserProfile(cloudProfile);
+      if (authErr.code === 'auth/invalid-credential' || authErr.code === 'auth/wrong-password') {
+        let inFirestore = false;
+        try {
+          const docSnap = await getDoc(doc(db, 'users', userId));
+          if (docSnap.exists()) inFirestore = true;
+        } catch {}
+
+        if (!isLocal && !inFirestore) {
+          const notRegErr = new Error('USER_NOT_REGISTERED');
+          notRegErr.code = 'USER_NOT_REGISTERED';
+          throw notRegErr;
         }
-      } catch (err) {
-        console.warn("Cloud background login sync:", err);
-      }
-    })();
 
-    return quickProfile;
+        const saved = JSON.parse(localStorage.getItem(LOCAL_REGISTRY_KEY) || '[]');
+        const localUser = saved.find(u => u.email?.toLowerCase() === cleanEmail);
+
+        if (localUser) {
+          if (localUser.password && localUser.password !== password) {
+            const wrongErr = new Error('Incorrect password. Please try again.');
+            wrongErr.code = 'WRONG_PASSWORD';
+            throw wrongErr;
+          }
+
+          setCurrentUser(localUser);
+          setUserProfile(localUser);
+          return localUser;
+        }
+
+        const wrongErr = new Error('Incorrect password. Please try again.');
+        wrongErr.code = 'WRONG_PASSWORD';
+        throw wrongErr;
+      }
+    }
+
+    // 3. Fallback check for local offline registry
+    if (isLocal) {
+      const saved = JSON.parse(localStorage.getItem(LOCAL_REGISTRY_KEY) || '[]');
+      const localUser = saved.find(u => u.email?.toLowerCase() === cleanEmail);
+      if (localUser) {
+        if (localUser.password && localUser.password !== password) {
+          const wrongErr = new Error('Incorrect password. Please try again.');
+          wrongErr.code = 'WRONG_PASSWORD';
+          throw wrongErr;
+        }
+        setCurrentUser(localUser);
+        setUserProfile(localUser);
+        return localUser;
+      }
+    }
+
+    // If not registered anywhere, throw registration requirement
+    const notRegErr = new Error('USER_NOT_REGISTERED');
+    notRegErr.code = 'USER_NOT_REGISTERED';
+    throw notRegErr;
   };
 
   // Logout

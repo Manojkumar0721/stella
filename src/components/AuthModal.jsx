@@ -31,7 +31,15 @@ export default function AuthModal({ onLoginSuccess }) {
         if (onLoginSuccess) onLoginSuccess();
       }
     } catch (err) {
-      setError(err.message || 'Authentication failed. Please try again.');
+      if (err.code === 'USER_NOT_REGISTERED' || err.message === 'USER_NOT_REGISTERED') {
+        setMode('register');
+        setError('No registered account found with this email. Please create your account first below.');
+      } else if (err.code === 'ALREADY_REGISTERED' || err.message === 'ALREADY_REGISTERED') {
+        setMode('login');
+        setError('An account with this email already exists. Please sign in instead.');
+      } else {
+        setError(err.message || 'Authentication failed. Please try again.');
+      }
     } finally {
       setIsSubmitting(false);
     }
