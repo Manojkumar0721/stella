@@ -472,6 +472,7 @@ export function AuthProvider({ children }) {
     return getLocalUserRegistry();
   };
 
+  // Instant 0ms Local Update + Async Cloud Sync
   const toggleRestrictUser = async (targetUid) => {
     const registry = getLocalUserRegistry();
     const index = registry.findIndex(u => u && u.uid === targetUid);
@@ -480,19 +481,26 @@ export function AuthProvider({ children }) {
       registry[index].isRestricted = newStatus;
       localStorage.setItem(LOCAL_REGISTRY_KEY, JSON.stringify(registry));
       try {
-        await setDoc(doc(db, 'users', targetUid), { isRestricted: newStatus }, { merge: true });
+        await setDoc(doc(db, 'users', targetUid), { isRestricted: newStatus }, { merge: true }).catch(() => {});
       } catch (err) {
         console.warn("Firestore restrict sync note:", err);
       }
     }
   };
 
+  // Instant 0ms Local Update + Async Cloud Sync
   const deleteUserByAdmin = async (targetUid) => {
     let registry = getLocalUserRegistry();
+    const targetUser = registry.find(u => u && u.uid === targetUid);
     registry = registry.filter(u => u && u.uid !== targetUid);
     localStorage.setItem(LOCAL_REGISTRY_KEY, JSON.stringify(registry));
+    
     try {
-      await deleteDoc(doc(db, 'users', targetUid));
+      await deleteDoc(doc(db, 'users', targetUid)).catch(() => {});
+      if (targetUser && targetUser.email) {
+        const customId = makeUserId(targetUser.email);
+        await deleteDoc(doc(db, 'users', customId)).catch(() => {});
+      }
     } catch (err) {
       console.warn("Firestore delete sync note:", err);
     }

@@ -30,29 +30,53 @@ export default function AdminDashboard({ onBackToDashboard }) {
     );
   };
 
-  const handleToggleRestrict = async (user) => {
+  // Instant 0ms Optimistic Restrict Toggle
+  const handleToggleRestrict = (user) => {
+    if (!user) return;
     if (isSystemAdmin(user) || user.uid === userProfile?.uid) {
       alert("System administrator accounts cannot be restricted.");
       return;
     }
     const isNowRestricted = !user.isRestricted;
-    await toggleRestrictUser(user.uid);
-    loadUsers();
-    setActionSuccess(`User "${user.displayName || user.email}" has been ${isNowRestricted ? 'restricted' : 'unrestricted'} successfully.`);
+    const targetUid = user.uid;
+    const targetName = user.displayName || user.email;
+
+    // 1. Instant local component state update (0ms UI latency!)
+    setUsersList(prev => prev.map(u => {
+      if (u && (u.uid === targetUid || u.email === user.email)) {
+        return { ...u, isRestricted: isNowRestricted };
+      }
+      return u;
+    }));
+    setActionSuccess(`User "${targetName}" has been ${isNowRestricted ? 'restricted' : 'unrestricted'} successfully.`);
+
+    // 2. Background async persistence
+    toggleRestrictUser(targetUid).catch(err => console.warn(err));
+
     setTimeout(() => setActionSuccess(''), 3000);
   };
 
-  const handleDeleteConfirm = async () => {
+  // Instant 0ms Optimistic Permanent Delete
+  const handleDeleteConfirm = () => {
     if (!selectedUserForDelete) return;
     if (isSystemAdmin(selectedUserForDelete) || selectedUserForDelete.uid === userProfile?.uid) {
       alert("System administrator accounts cannot be deleted.");
       setSelectedUserForDelete(null);
       return;
     }
-    await deleteUserByAdmin(selectedUserForDelete.uid);
-    loadUsers();
-    setActionSuccess(`User "${selectedUserForDelete.displayName || selectedUserForDelete.email}" was permanently deleted.`);
+
+    const targetUid = selectedUserForDelete.uid;
+    const targetEmail = selectedUserForDelete.email;
+    const targetName = selectedUserForDelete.displayName || selectedUserForDelete.email;
+
+    // 1. Instant local UI update & modal close (0ms UI latency!)
+    setUsersList(prev => prev.filter(u => u && u.uid !== targetUid && u.email !== targetEmail));
     setSelectedUserForDelete(null);
+    setActionSuccess(`User "${targetName}" was permanently deleted.`);
+
+    // 2. Background async storage & cloud deletion
+    deleteUserByAdmin(targetUid).catch(err => console.warn(err));
+
     setTimeout(() => setActionSuccess(''), 3000);
   };
 
