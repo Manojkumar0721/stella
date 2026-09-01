@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
-import { Calendar as CalendarIcon, Sparkles, Rocket, ArrowRight, Target, AlertCircle, ArrowLeft } from 'lucide-react';
+import { Calendar as CalendarIcon, Sparkles, Rocket, ArrowRight, Target, AlertCircle, ArrowLeft, CalendarDays } from 'lucide-react';
 import { formatDateString } from '../utils/dateUtils';
+import DateRangePickerModal from './DateRangePickerModal';
 
 export default function ChallengeSetup({ onCreateChallenge, onCancel, hasExistingChallenges }) {
-  const today = new Date();
-
   const [challengeName, setChallengeName] = useState('September – November 2026 Challenge');
   const [startDate, setStartDate] = useState('2026-09-01');
   const [endDate, setEndDate] = useState('2026-11-30');
   const [errorMsg, setErrorMsg] = useState('');
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   // Preset handlers
   const setPresetSepNov2026 = () => {
@@ -38,6 +38,21 @@ export default function ChallengeSetup({ onCreateChallenge, onCancel, hasExistin
     setErrorMsg('');
   };
 
+  const calculateDays = () => {
+    if (!startDate || !endDate) return 0;
+    const d1 = new Date(startDate);
+    const d2 = new Date(endDate);
+    const diff = Math.abs(d2 - d1);
+    return Math.ceil(diff / (1000 * 60 * 60 * 24)) + 1;
+  };
+
+  const formatNiceDate = (dateStr) => {
+    if (!dateStr) return '';
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dt = new Date(y, m - 1, d);
+    return dt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!startDate || !endDate) {
@@ -50,10 +65,7 @@ export default function ChallengeSetup({ onCreateChallenge, onCancel, hasExistin
       return;
     }
 
-    const d1 = new Date(startDate);
-    const d2 = new Date(endDate);
-    const diffTime = Math.abs(d2 - d1);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    const diffDays = calculateDays();
 
     if (diffDays > 366) {
       setErrorMsg('Challenge duration cannot exceed 1 year (366 days).');
@@ -165,34 +177,42 @@ export default function ChallengeSetup({ onCreateChallenge, onCancel, hasExistin
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-gray-300 flex items-center gap-1.5">
-                <CalendarIcon className="w-3.5 h-3.5 text-blue-400" />
-                <span>Start Date</span>
-              </label>
-              <input
-                type="date"
-                required
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-full bg-[#131314] border border-neutral-800 rounded-full px-4 py-2.5 text-sm text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500/50 transition-all"
-              />
-            </div>
+          {/* Interactive Date Range Calendar Trigger Button */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-gray-300 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <CalendarIcon className="w-4 h-4 text-blue-400" />
+                <span>Challenge Date Range</span>
+              </span>
+              <span className="text-[11px] text-blue-400 font-medium">Click to change</span>
+            </label>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-gray-300 flex items-center gap-1.5">
-                <CalendarIcon className="w-3.5 h-3.5 text-blue-400" />
-                <span>End Date</span>
-              </label>
-              <input
-                type="date"
-                required
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="w-full bg-[#131314] border border-neutral-800 rounded-full px-4 py-2.5 text-sm text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500/50 transition-all"
-              />
-            </div>
+            <button
+              type="button"
+              onClick={() => setShowDatePicker(true)}
+              className="w-full bg-[#131314] hover:bg-[#282a2c] border border-neutral-800 hover:border-blue-500/40 rounded-3xl p-4 transition-all text-left flex items-center justify-between group shadow-sm active:scale-[0.99]"
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-2xl bg-blue-500/10 text-blue-400 border border-blue-500/20 group-hover:bg-blue-600 group-hover:text-white transition-all">
+                  <CalendarDays className="w-5 h-5" />
+                </div>
+
+                <div className="space-y-0.5">
+                  <p className="text-sm font-bold text-gray-100 flex items-center gap-2">
+                    <span>{formatNiceDate(startDate)}</span>
+                    <span className="text-gray-500 font-normal">to</span>
+                    <span>{formatNiceDate(endDate)}</span>
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    Duration: <span className="text-blue-400 font-semibold">{calculateDays()} Days</span>
+                  </p>
+                </div>
+              </div>
+
+              <span className="bg-[#1e1f20] group-hover:bg-blue-600 group-hover:text-white text-gray-300 text-xs px-3.5 py-1.5 rounded-full border border-neutral-700/60 transition-all font-semibold shrink-0">
+                Open Calendar
+              </span>
+            </button>
           </div>
 
           {/* Error Banner */}
@@ -225,6 +245,20 @@ export default function ChallengeSetup({ onCreateChallenge, onCancel, hasExistin
           </div>
         </form>
       </div>
+
+      {/* Date Range Picker Calendar Popup Modal */}
+      {showDatePicker && (
+        <DateRangePickerModal
+          initialStartDate={startDate}
+          initialEndDate={endDate}
+          onSave={(newStart, newEnd) => {
+            setStartDate(newStart);
+            setEndDate(newEnd);
+            setErrorMsg('');
+          }}
+          onClose={() => setShowDatePicker(false)}
+        />
+      )}
     </div>
   );
 }
