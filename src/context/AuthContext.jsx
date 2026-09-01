@@ -83,7 +83,9 @@ export async function findRegisteredUserFirestoreOnly(email) {
   try {
     const docSnap = await getDoc(doc(db, 'users', customId));
     if (docSnap.exists()) return docSnap.data();
-  } catch {}
+  } catch (err) {
+    console.warn("Firestore doc check note:", err);
+  }
 
   // 2. Firestore check by email query
   try {
@@ -92,7 +94,9 @@ export async function findRegisteredUserFirestoreOnly(email) {
     if (!snap.empty) {
       return snap.docs[0].data();
     }
-  } catch {}
+  } catch (err) {
+    console.warn("Firestore query check note:", err);
+  }
 
   return null;
 }
@@ -180,6 +184,15 @@ export function AuthProvider({ children }) {
       throw err;
     }
 
+    // Check cloud Firestore for existing registration
+    const cloudExisting = await findRegisteredUserFirestoreOnly(cleanEmail);
+    if (cloudExisting) {
+      saveUserToRegistry(cloudExisting);
+      const err = new Error('ALREADY_REGISTERED');
+      err.code = 'ALREADY_REGISTERED';
+      throw err;
+    }
+
     const userId = makeUserId(cleanEmail);
     const profile = {
       uid: userId,
@@ -200,13 +213,15 @@ export function AuthProvider({ children }) {
     (async () => {
       try {
         const res = await createUserWithEmailAndPassword(auth, cleanEmail, password);
-        if (res?.user?.uid) {
-          const cloudProfile = { ...profile, uid: res.user.uid };
-          await setDoc(doc(db, 'users', res.user.uid), cloudProfile).catch(() => {});
+        const finalUid = res?.user?.uid || userId;
+        const cloudProfile = { ...profile, uid: finalUid };
+
+        await setDoc(doc(db, 'users', finalUid), cloudProfile).catch(() => {});
+        if (finalUid !== userId) {
           await setDoc(doc(db, 'users', userId), cloudProfile).catch(() => {});
-          saveUserToRegistry(cloudProfile);
-          setUserProfile(prev => (prev && prev.email === cleanEmail ? cloudProfile : prev));
         }
+        saveUserToRegistry(cloudProfile);
+        setUserProfile(prev => (prev && prev.email === cleanEmail ? cloudProfile : prev));
       } catch (err) {
         try {
           await setDoc(doc(db, 'users', userId), profile).catch(() => {});
@@ -217,7 +232,7 @@ export function AuthProvider({ children }) {
     return profile;
   };
 
-  // Sign in (Zero Latency Instant Response)
+  // Sign in (Strictly enforces user registration on live & local environments)
   const signIn = async (email, password) => {
     const cleanEmail = email.trim().toLowerCase();
 
@@ -264,11 +279,12 @@ export function AuthProvider({ children }) {
 
     const firebaseUser = authResult.user;
     const authError = authResult.error;
-    const isWrongPasswordErr = authError && (authError.code === 'auth/wrong-password' || authError.code === 'auth/invalid-credential');
 
-    const isRegistered = !!(firestoreUser || firebaseUser || isWrongPasswordErr);
+    // Strict registration check: user is registered ONLY if found in Firestore, Firebase Auth succeeds, or explicit wrong-password error code
+    const isRegistered = !!(firestoreUser || firebaseUser || (authError && authError.code === 'auth/wrong-password'));
 
     if (!isRegistered) {
+      // User is NOT registered anywhere! Force redirect to registration!
       const notRegErr = new Error('USER_NOT_REGISTERED');
       notRegErr.code = 'USER_NOT_REGISTERED';
       throw notRegErr;
