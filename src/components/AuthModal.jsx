@@ -55,6 +55,10 @@ export default function AuthModal({ onLoginSuccess }) {
       } else if (err.code === 'ALREADY_REGISTERED' || err.message === 'ALREADY_REGISTERED') {
         setMode('login');
         setError('An account with this email already exists. Please sign in instead.');
+      } else if (err.code === 'auth/unauthorized-domain') {
+        setError('Domain Not Authorized: Please add your production web URL (e.g. onrender.com) to Firebase Console > Authentication > Settings > Authorized Domains.');
+      } else if (err.code === 'auth/operation-not-allowed') {
+        setError('Email/Password Sign-In Disabled: Please enable Email/Password in Firebase Console > Authentication > Sign-in method.');
       } else {
         setError(err.message || 'Authentication failed. Please try again.');
       }
