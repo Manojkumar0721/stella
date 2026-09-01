@@ -161,19 +161,26 @@ export function AuthProvider({ children }) {
   };
 
   // Sign up with Gmail/Email, Password, and Full Name
-  const signUp = async (email, password, displayName) => {
-    const cleanEmail = email.trim().toLowerCase();
+  const signUp = async (email, password, displayName, autoSignIn = false) => {
+    const cleanEmail = (email || '').trim().toLowerCase();
     const cleanUsername = cleanEmail.split('@')[0].toLowerCase();
     const cleanDisplay = displayName ? displayName.trim() : cleanUsername;
 
     if (!cleanEmail) {
-      throw new Error('Please enter a valid email address.');
+      throw new Error('Please enter a valid Gmail / Email address.');
     }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanEmail)) {
+      throw new Error('Please enter a valid Gmail / Email address format.');
+    }
+
     if (!password || password.length < 6) {
       throw new Error('Password must be at least 6 characters long.');
     }
+
     if (!cleanDisplay) {
-      throw new Error('Full Name is required.');
+      throw new Error('Full Name is required for registration.');
     }
 
     // Check local registry
@@ -236,18 +243,31 @@ export function AuthProvider({ children }) {
     }
 
     saveUserToRegistry(profile);
-    setCurrentUser(firebaseUserObj || profile);
-    setUserProfile(profile);
+
+    if (autoSignIn) {
+      setCurrentUser(firebaseUserObj || profile);
+      setUserProfile(profile);
+    } else {
+      // Sign out from Firebase Auth so auth state listener doesn't auto-login
+      try {
+        await signOut(auth);
+      } catch {}
+    }
 
     return profile;
   };
 
-  // Sign in (Strictly enforces prior user registration in production & local environments)
+  // Sign in (Strictly enforces prior user registration & matching credentials)
   const signIn = async (email, password) => {
-    const cleanEmail = email.trim().toLowerCase();
+    const cleanEmail = (email || '').trim().toLowerCase();
 
     if (!cleanEmail || !password) {
-      throw new Error('Please enter both email and password.');
+      throw new Error('Please enter both Gmail / Email address and password.');
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanEmail)) {
+      throw new Error('Please enter a valid Gmail / Email address format.');
     }
 
     // Step 1: Check local registry (0ms)
@@ -255,7 +275,7 @@ export function AuthProvider({ children }) {
 
     if (localUser) {
       if (localUser.password && localUser.password !== password) {
-        const wrongErr = new Error('Incorrect password. Please try again.');
+        const wrongErr = new Error('Incorrect password. Gmail and password must match. Access denied.');
         wrongErr.code = 'WRONG_PASSWORD';
         throw wrongErr;
       }
@@ -289,15 +309,36 @@ export function AuthProvider({ children }) {
     const firebaseUser = authResult.user;
     const authError = authResult.error;
 
-    // Strict registration determination for production:
-    // A user is registered ONLY if found in Firestore, Firebase Auth succeeds, or explicit wrong password code is returned
-    const isRegistered = !!(firestoreUser || firebaseUser || (authError && authError.code === 'auth/wrong-password'));
+    // Strict registration determination:
+    // A user is registered ONLY if found in Firestore DB, Firebase Auth succeeds, or wrong password code returned
+    const isRegistered = !!(
+      firestoreUser || 
+      firebaseUser || 
+      (authError && (
+        authError.code === 'auth/wrong-password' || 
+        authError.code === 'auth/invalid-credential' ||
+        authError.code === 'auth/invalid-password'
+      ))
+    );
 
     if (!isRegistered) {
       // User is NOT registered anywhere! Force redirect to registration!
       const notRegErr = new Error('USER_NOT_REGISTERED');
       notRegErr.code = 'USER_NOT_REGISTERED';
       throw notRegErr;
+    }
+
+    // Registered user entered wrong password in Firebase Auth
+    if (authError && (authError.code === 'auth/wrong-password' || authError.code === 'auth/invalid-credential')) {
+      if (firestoreUser && firestoreUser.password === password) {
+        setCurrentUser(firestoreUser);
+        setUserProfile(firestoreUser);
+        saveUserToRegistry(firestoreUser);
+        return firestoreUser;
+      }
+      const wrongErr = new Error('Incorrect password. Gmail and password must match. Access denied.');
+      wrongErr.code = 'WRONG_PASSWORD';
+      throw wrongErr;
     }
 
     if (firebaseUser) {
@@ -318,7 +359,7 @@ export function AuthProvider({ children }) {
 
     if (firestoreUser) {
       if (firestoreUser.password && firestoreUser.password !== password) {
-        const wrongErr = new Error('Incorrect password. Please try again.');
+        const wrongErr = new Error('Incorrect password. Gmail and password must match. Access denied.');
         wrongErr.code = 'WRONG_PASSWORD';
         throw wrongErr;
       }
@@ -328,7 +369,7 @@ export function AuthProvider({ children }) {
       return firestoreUser;
     }
 
-    const wrongErr = new Error('Incorrect password. Please try again.');
+    const wrongErr = new Error('Incorrect password. Gmail and password must match. Access denied.');
     wrongErr.code = 'WRONG_PASSWORD';
     throw wrongErr;
   };
@@ -347,7 +388,6 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user && !userProfile) {
-        setCurrentUser(user);
         let profile = await fetchUserProfileQuick(user.uid);
         if (!profile && user.email) {
           profile = findLocalUserSync(user.email);
@@ -367,6 +407,7 @@ export function AuthProvider({ children }) {
           };
         }
         if (profile) {
+          setCurrentUser(user);
           setUserProfile(profile);
           saveUserToRegistry(profile);
         }

@@ -22,7 +22,7 @@ export default function AuthModal({ onLoginSuccess }) {
     if (containerRef.current) {
       containerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
     }
-  }, [mode, error]);
+  }, [mode, error, successMsg]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -37,13 +37,24 @@ export default function AuthModal({ onLoginSuccess }) {
 
     try {
       if (mode === 'register') {
-        if (!displayName.trim()) throw new Error('Full Name is required.');
-        // Add a smooth 500ms visual loading transition delay & buffer
+        const cleanName = displayName.trim();
+        if (!cleanName) throw new Error('Full Name is required for registration.');
+        if (!email.trim()) throw new Error('Gmail / Email address is required.');
+        if (!password) throw new Error('Password is required.');
+
+        // Add visual loading transition buffer
         await new Promise(resolve => setTimeout(resolve, 500));
-        await signUp(email, password, displayName);
-        if (onLoginSuccess) onLoginSuccess();
+        await signUp(email, password, cleanName, false);
+        
+        // After registration -> redirect to Sign In page so user logs in properly with credentials
+        setMode('login');
+        setPassword('');
+        setSuccessMsg('Registration successful! Please sign in with your registered Gmail and password to log in.');
       } else {
-        // Add a smooth 500ms visual loading transition delay & buffer
+        if (!email.trim()) throw new Error('Gmail / Email address is required.');
+        if (!password) throw new Error('Password is required.');
+
+        // Add visual loading transition buffer
         await new Promise(resolve => setTimeout(resolve, 500));
         await signIn(email, password);
         if (onLoginSuccess) onLoginSuccess();
@@ -51,12 +62,14 @@ export default function AuthModal({ onLoginSuccess }) {
     } catch (err) {
       if (err.code === 'USER_NOT_REGISTERED' || err.message === 'USER_NOT_REGISTERED') {
         setMode('register');
-        setError('No registered account found with this email. Please create your account first below.');
+        setError('No registered account found with this Gmail. Please complete registration first before logging in.');
       } else if (err.code === 'ALREADY_REGISTERED' || err.message === 'ALREADY_REGISTERED') {
         setMode('login');
-        setError('An account with this email already exists. Please sign in instead.');
+        setError('An account with this Gmail already exists. Please sign in with your password instead.');
+      } else if (err.code === 'WRONG_PASSWORD' || err.message === 'WRONG_PASSWORD') {
+        setError('Incorrect password. Gmail and password must match. Access denied.');
       } else if (err.code === 'auth/unauthorized-domain') {
-        setError('Domain Not Authorized: Please add your production web URL (e.g. onrender.com) to Firebase Console > Authentication > Settings > Authorized Domains.');
+        setError('Domain Not Authorized: Please add your production web URL to Firebase Console > Authentication > Settings > Authorized Domains.');
       } else if (err.code === 'auth/operation-not-allowed') {
         setError('Email/Password Sign-In Disabled: Please enable Email/Password in Firebase Console > Authentication > Sign-in method.');
       } else {
@@ -127,24 +140,24 @@ export default function AuthModal({ onLoginSuccess }) {
 
         {/* Success Alert */}
         {successMsg && (
-          <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 p-3 rounded-2xl text-xs flex items-center gap-2">
+          <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 p-3.5 rounded-2xl text-xs flex items-center gap-2.5 animate-fade-in">
             <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
-            <span>{successMsg}</span>
+            <span className="leading-snug">{successMsg}</span>
           </div>
         )}
 
         {/* Error Notification */}
         {error && (
-          <div className="bg-rose-500/10 border border-rose-500/30 text-rose-300 p-3 rounded-2xl text-xs flex items-center gap-2">
+          <div className="bg-rose-500/10 border border-rose-500/30 text-rose-300 p-3.5 rounded-2xl text-xs flex items-center gap-2.5 animate-fade-in">
             <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
-            <span>{error}</span>
+            <span className="leading-snug">{error}</span>
           </div>
         )}
 
         {/* Auth Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           {mode === 'register' && (
-            /* Full Name Input (No Username Input) */
+            /* Full Name Input */
             <div className="space-y-1">
               <label className="text-xs font-medium text-gray-300 ml-1">Full Name <span className="text-rose-400">*</span></label>
               <div className="relative">
