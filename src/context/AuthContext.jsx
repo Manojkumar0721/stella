@@ -211,7 +211,7 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // Sign up with Gmail/Email, Password, and Full Name
+  // Instant 0ms Registration (Synchronous local registry write + background cloud sync)
   const signUp = async (email, password, displayName, autoSignIn = false) => {
     const cleanEmail = (email || '').trim().toLowerCase();
     const cleanUsername = cleanEmail.split('@')[0].toLowerCase();
@@ -234,7 +234,7 @@ export function AuthProvider({ children }) {
       throw new Error('Full Name is required for registration.');
     }
 
-    // Check local registry
+    // Synchronous (0ms) local registry check
     const localExisting = findLocalUserSync(cleanEmail);
     if (localExisting) {
       const err = new Error('ALREADY_REGISTERED');
@@ -242,36 +242,7 @@ export function AuthProvider({ children }) {
       throw err;
     }
 
-    // Check cloud Firestore
-    const cloudExisting = await findRegisteredUserFirestoreOnly(cleanEmail);
-    if (cloudExisting) {
-      saveUserToRegistry(cloudExisting);
-      const err = new Error('ALREADY_REGISTERED');
-      err.code = 'ALREADY_REGISTERED';
-      throw err;
-    }
-
-    let firebaseUid = null;
-    let firebaseUserObj = null;
-
-    try {
-      const res = await createUserWithEmailAndPassword(auth, cleanEmail, password);
-      firebaseUid = res.user.uid;
-      firebaseUserObj = res.user;
-    } catch (err) {
-      if (err.code === 'auth/email-already-in-use') {
-        const alreadyErr = new Error('ALREADY_REGISTERED');
-        alreadyErr.code = 'ALREADY_REGISTERED';
-        throw alreadyErr;
-      } else if (err.code === 'auth/weak-password') {
-        throw new Error('Password should be at least 6 characters.');
-      } else if (err.code === 'auth/invalid-email') {
-        throw new Error('Invalid email address format.');
-      }
-      console.warn("Firebase Auth sign up note:", err);
-    }
-
-    const userId = firebaseUid || makeUserId(cleanEmail);
+    const userId = makeUserId(cleanEmail);
 
     const profile = {
       uid: userId,
@@ -285,32 +256,36 @@ export function AuthProvider({ children }) {
       createdAt: new Date().toISOString()
     };
 
-    // Save profile to Firestore under both doc IDs
-    try {
-      await setDoc(doc(db, 'users', userId), profile).catch(() => {});
-      if (firebaseUid && userId !== makeUserId(cleanEmail)) {
-        await setDoc(doc(db, 'users', makeUserId(cleanEmail)), profile).catch(() => {});
-      }
-    } catch (err) {
-      console.warn("Firestore registration note:", err);
-    }
-
+    // Save profile to local storage synchronously (0ms latency!)
     saveUserToRegistry(profile);
 
     if (autoSignIn) {
-      setCurrentUser(firebaseUserObj || profile);
+      setCurrentUser(profile);
       setUserProfile(profile);
-    } else {
-      // Sign out from Firebase Auth so auth state listener doesn't auto-login
-      try {
-        await signOut(auth);
-      } catch {}
     }
+
+    // Non-blocking async background cloud sync
+    (async () => {
+      try {
+        const res = await createUserWithEmailAndPassword(auth, cleanEmail, password);
+        const firebaseUid = res.user?.uid;
+        if (firebaseUid) {
+          profile.uid = firebaseUid;
+          await setDoc(doc(db, 'users', firebaseUid), profile).catch(() => {});
+        }
+        await setDoc(doc(db, 'users', userId), profile).catch(() => {});
+        if (!autoSignIn) {
+          await signOut(auth).catch(() => {});
+        }
+      } catch (err) {
+        console.warn("Background Firebase registration sync note:", err);
+      }
+    })();
 
     return profile;
   };
 
-  // Sign in (Strictly enforces prior user registration, restriction checks & matching credentials)
+  // Instant 0ms Sign In
   const signIn = async (email, password) => {
     const cleanEmail = (email || '').trim().toLowerCase();
 
@@ -323,7 +298,7 @@ export function AuthProvider({ children }) {
       throw new Error('Please enter a valid Gmail / Email address format.');
     }
 
-    // Direct Admin Credentials Shortcut (Guarantees Instant Admin Login)
+    // Direct Admin Credentials Shortcut (0ms)
     if ((cleanEmail === DEFAULT_ADMIN.email || cleanEmail === DEFAULT_ADMIN_ALT.email) && password === 'admin123') {
       const adminObj = cleanEmail === DEFAULT_ADMIN.email ? DEFAULT_ADMIN : DEFAULT_ADMIN_ALT;
       saveUserToRegistry(adminObj);
@@ -332,7 +307,7 @@ export function AuthProvider({ children }) {
       return adminObj;
     }
 
-    // Step 1: Check local registry (0ms)
+    // Step 1: Check local registry (0ms synchronous lookup)
     const localUser = findLocalUserSync(cleanEmail);
 
     if (localUser) {
@@ -351,7 +326,7 @@ export function AuthProvider({ children }) {
       setCurrentUser(localUser);
       setUserProfile(localUser);
 
-      // Async cloud sync
+      // Non-blocking async background cloud sync
       (async () => {
         try {
           const res = await signInWithEmailAndPassword(auth, cleanEmail, password);
@@ -366,7 +341,7 @@ export function AuthProvider({ children }) {
       return localUser;
     }
 
-    // Step 2: Query Firestore & Firebase Auth concurrently for cloud registration status
+    // Step 2: Query Firestore & Firebase Auth concurrently ONLY if user is not in local registry
     const [authResult, firestoreUser] = await Promise.all([
       signInWithEmailAndPassword(auth, cleanEmail, password)
         .then(res => ({ user: res.user, error: null }))
@@ -389,20 +364,17 @@ export function AuthProvider({ children }) {
     );
 
     if (!isRegistered) {
-      // User is NOT registered anywhere! Force redirect to registration!
       const notRegErr = new Error('USER_NOT_REGISTERED');
       notRegErr.code = 'USER_NOT_REGISTERED';
       throw notRegErr;
     }
 
-    // Check if cloud user is restricted
     if (firestoreUser?.isRestricted) {
       const restrErr = new Error('Your account has been restricted by an administrator. Access denied.');
       restrErr.code = 'USER_RESTRICTED';
       throw restrErr;
     }
 
-    // Registered user entered wrong password in Firebase Auth
     if (authError && (authError.code === 'auth/wrong-password' || authError.code === 'auth/invalid-credential')) {
       if (firestoreUser && firestoreUser.password === password) {
         if (firestoreUser.isRestricted) {

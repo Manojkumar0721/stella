@@ -30,7 +30,6 @@ export default function AuthModal({ onLoginSuccess }) {
     setSuccessMsg('');
     setIsSubmitting(true);
 
-    // Smooth scroll buffer to top when starting submit
     if (containerRef.current) {
       containerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -42,8 +41,7 @@ export default function AuthModal({ onLoginSuccess }) {
         if (!email.trim()) throw new Error('Gmail / Email address is required.');
         if (!password) throw new Error('Password is required.');
 
-        // Add visual loading transition buffer
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Instant 0ms Registration
         await signUp(email, password, cleanName, false);
         
         // After registration -> redirect to Sign In page so user logs in properly with credentials
@@ -54,8 +52,7 @@ export default function AuthModal({ onLoginSuccess }) {
         if (!email.trim()) throw new Error('Gmail / Email address is required.');
         if (!password) throw new Error('Password is required.');
 
-        // Add visual loading transition buffer
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Instant 0ms Login
         await signIn(email, password);
         if (onLoginSuccess) onLoginSuccess();
       }
