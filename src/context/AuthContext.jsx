@@ -3,9 +3,7 @@ import {
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
   signOut, 
-  onAuthStateChanged,
-  GoogleAuthProvider,
-  signInWithPopup
+  onAuthStateChanged
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '../firebase';
@@ -19,12 +17,20 @@ export function useAuth() {
 const SESSION_PROFILE_KEY = 'stella_active_user_session_v1';
 const LOCAL_REGISTRY_KEY = 'stella_registered_users_registry_v1';
 
+export function getLocalUserRegistry() {
+  try {
+    return JSON.parse(localStorage.getItem(LOCAL_REGISTRY_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
+
 export function saveUserToRegistry(profile) {
   if (!profile || !profile.email) return;
   try {
-    const saved = JSON.parse(localStorage.getItem(LOCAL_REGISTRY_KEY) || '[]');
+    const saved = getLocalUserRegistry();
     const cleanEmail = profile.email.trim().toLowerCase();
-    const existingIndex = saved.findIndex(u => u.email?.toLowerCase() === cleanEmail || u.uid === profile.uid);
+    const existingIndex = saved.findIndex(u => u && (u.email?.toLowerCase() === cleanEmail || u.uid === profile.uid));
 
     let updatedProfile = { ...profile };
     if (existingIndex >= 0) {
@@ -50,11 +56,52 @@ export function isEmailRegisteredLocally(email) {
   if (!email) return false;
   try {
     const cleanEmail = email.trim().toLowerCase();
-    const saved = JSON.parse(localStorage.getItem(LOCAL_REGISTRY_KEY) || '[]');
-    return saved.some(u => u.email?.toLowerCase() === cleanEmail);
+    const saved = getLocalUserRegistry();
+    return saved.some(u => u && u.email?.toLowerCase() === cleanEmail);
   } catch {
     return false;
   }
+}
+
+export function findLocalUserSync(email) {
+  if (!email) return null;
+  const cleanEmail = email.trim().toLowerCase();
+  const saved = getLocalUserRegistry();
+  return saved.find(u => u && u.email && u.email.trim().toLowerCase() === cleanEmail) || null;
+}
+
+export function makeUserId(email) {
+  return `usr_${email.trim().toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+}
+
+export async function findRegisteredUserFirestoreOnly(email) {
+  if (!email) return null;
+  const cleanEmail = email.trim().toLowerCase();
+  const customId = makeUserId(cleanEmail);
+
+  // 1. Firestore check by custom doc id (makeUserId)
+  try {
+    const docSnap = await getDoc(doc(db, 'users', customId));
+    if (docSnap.exists()) return docSnap.data();
+  } catch {}
+
+  // 2. Firestore check by email query
+  try {
+    const q = query(collection(db, 'users'), where('email', '==', cleanEmail));
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      return snap.docs[0].data();
+    }
+  } catch {}
+
+  return null;
+}
+
+export async function findRegisteredUser(email) {
+  if (!email) return null;
+  const local = findLocalUserSync(email);
+  if (local) return local;
+  return await findRegisteredUserFirestoreOnly(email);
 }
 
 export function AuthProvider({ children }) {
@@ -94,52 +141,46 @@ export function AuthProvider({ children }) {
     }
   }, [userProfile]);
 
-  // Update profile avatar helper
   const updateProfileAvatar = (newUrl) => {
     setUserProfile(prev => prev ? { ...prev, avatarUrl: newUrl } : null);
   };
 
-  // Fast 150ms Firestore query wrapper
   const fetchUserProfileQuick = async (uid) => {
     try {
       const docRef = doc(db, 'users', uid);
-      const timeout = new Promise((resolve) => setTimeout(() => resolve(null), 150));
-      const queryPromise = getDoc(docRef).then(snap => snap.exists() ? snap.data() : null);
-      return await Promise.race([queryPromise, timeout]);
+      const snap = await getDoc(docRef);
+      if (snap.exists()) return snap.data();
+      return null;
     } catch {
       return null;
     }
   };
 
-  const makeUserId = (email) => `usr_${email.trim().toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
-
-  // Sign up with Gmail/Email, Password, and Full Name
+  // Sign up with Gmail/Email, Password, and Full Name (Zero Latency Instant Response)
   const signUp = async (email, password, displayName) => {
     const cleanEmail = email.trim().toLowerCase();
     const cleanUsername = cleanEmail.split('@')[0].toLowerCase();
-    const cleanDisplay = displayName.trim() || cleanUsername;
+    const cleanDisplay = displayName ? displayName.trim() : cleanUsername;
 
-    // Check if already registered locally
-    if (isEmailRegisteredLocally(cleanEmail)) {
+    if (!cleanEmail) {
+      throw new Error('Please enter a valid email address.');
+    }
+    if (!password || password.length < 6) {
+      throw new Error('Password must be at least 6 characters long.');
+    }
+    if (!cleanDisplay) {
+      throw new Error('Full Name is required.');
+    }
+
+    // Fast synchronous local check (0ms)
+    const localExisting = findLocalUserSync(cleanEmail);
+    if (localExisting) {
       const err = new Error('ALREADY_REGISTERED');
       err.code = 'ALREADY_REGISTERED';
       throw err;
     }
 
-    let firebaseUid = null;
-    try {
-      const res = await createUserWithEmailAndPassword(auth, cleanEmail, password);
-      firebaseUid = res.user.uid;
-    } catch (err) {
-      if (err.code === 'auth/email-already-in-use') {
-        const alreadyErr = new Error('ALREADY_REGISTERED');
-        alreadyErr.code = 'ALREADY_REGISTERED';
-        throw alreadyErr;
-      }
-    }
-
-    const userId = firebaseUid || makeUserId(cleanEmail);
-
+    const userId = makeUserId(cleanEmail);
     const profile = {
       uid: userId,
       email: cleanEmail,
@@ -150,94 +191,43 @@ export function AuthProvider({ children }) {
       createdAt: new Date().toISOString()
     };
 
-    // Save profile to Firestore
-    try {
-      await setDoc(doc(db, 'users', userId), profile).catch(() => {});
-    } catch (err) {
-      console.warn("Firestore registration note:", err);
-    }
-
+    // Instant local state update (0ms latency!)
+    saveUserToRegistry(profile);
     setCurrentUser(profile);
     setUserProfile(profile);
-    saveUserToRegistry(profile);
+
+    // Non-blocking background cloud sync
+    (async () => {
+      try {
+        const res = await createUserWithEmailAndPassword(auth, cleanEmail, password);
+        if (res?.user?.uid) {
+          const cloudProfile = { ...profile, uid: res.user.uid };
+          await setDoc(doc(db, 'users', res.user.uid), cloudProfile).catch(() => {});
+          await setDoc(doc(db, 'users', userId), cloudProfile).catch(() => {});
+          saveUserToRegistry(cloudProfile);
+          setUserProfile(prev => (prev && prev.email === cleanEmail ? cloudProfile : prev));
+        }
+      } catch (err) {
+        try {
+          await setDoc(doc(db, 'users', userId), profile).catch(() => {});
+        } catch {}
+      }
+    })();
 
     return profile;
   };
 
-  // Sign in (Strictly enforces prior user registration)
+  // Sign in (Zero Latency Instant Response)
   const signIn = async (email, password) => {
     const cleanEmail = email.trim().toLowerCase();
-    const userId = makeUserId(cleanEmail);
 
     if (!cleanEmail || !password) {
       throw new Error('Please enter both email and password.');
     }
 
-    // Step 1: Check if user exists in local registry
-    const savedRegistry = (() => {
-      try {
-        return JSON.parse(localStorage.getItem(LOCAL_REGISTRY_KEY) || '[]');
-      } catch {
-        return [];
-      }
-    })();
+    // Step 1: Instant local registry check (0ms latency!)
+    const localUser = findLocalUserSync(cleanEmail);
 
-    const localUser = savedRegistry.find(u => u && u.email && u.email.trim().toLowerCase() === cleanEmail);
-
-    // Step 2: Check Firestore if not found in local registry
-    let firestoreUser = null;
-    if (!localUser) {
-      try {
-        const docSnap = await getDoc(doc(db, 'users', userId));
-        if (docSnap.exists()) {
-          firestoreUser = docSnap.data();
-        }
-      } catch (err) {
-        console.warn("Firestore query note:", err);
-      }
-    }
-
-    // Step 3: Try Firebase Auth sign in
-    let firebaseUser = null;
-    let authError = null;
-    try {
-      const res = await signInWithEmailAndPassword(auth, cleanEmail, password);
-      firebaseUser = res.user;
-    } catch (err) {
-      authError = err;
-    }
-
-    // Step 4: Determine registration status
-    const isRegistered = !!(localUser || firestoreUser || firebaseUser);
-
-    if (!isRegistered) {
-      // User is NOT registered anywhere! Force redirect to registration page!
-      const notRegErr = new Error('USER_NOT_REGISTERED');
-      notRegErr.code = 'USER_NOT_REGISTERED';
-      throw notRegErr;
-    }
-
-    // Step 5: User IS registered. Now verify password!
-    if (firebaseUser) {
-      let cloudProfile = await fetchUserProfileQuick(firebaseUser.uid);
-      if (!cloudProfile) {
-        const usernameFromEmail = cleanEmail.split('@')[0];
-        cloudProfile = {
-          uid: firebaseUser.uid,
-          email: cleanEmail,
-          username: usernameFromEmail,
-          displayName: firebaseUser.displayName || (localUser ? localUser.displayName : usernameFromEmail),
-          avatarUrl: firebaseUser.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${usernameFromEmail}`,
-          createdAt: new Date().toISOString()
-        };
-      }
-      setCurrentUser(firebaseUser);
-      setUserProfile(cloudProfile);
-      saveUserToRegistry(cloudProfile);
-      return cloudProfile;
-    }
-
-    // Check local registry user password
     if (localUser) {
       if (localUser.password && localUser.password !== password) {
         const wrongErr = new Error('Incorrect password. Please try again.');
@@ -245,26 +235,73 @@ export function AuthProvider({ children }) {
         throw wrongErr;
       }
 
+      // Zero Latency Login
       setCurrentUser(localUser);
       setUserProfile(localUser);
+
+      // Background Cloud Authentication & Sync
+      (async () => {
+        try {
+          const res = await signInWithEmailAndPassword(auth, cleanEmail, password);
+          if (res?.user) {
+            let cloudProfile = await fetchUserProfileQuick(res.user.uid);
+            if (!cloudProfile) cloudProfile = localUser;
+            saveUserToRegistry(cloudProfile);
+          }
+        } catch {}
+      })();
+
       return localUser;
     }
 
-    // Check firestore user
+    // Step 2: Concurrent cloud checks if not found locally
+    const [authResult, firestoreUser] = await Promise.all([
+      signInWithEmailAndPassword(auth, cleanEmail, password)
+        .then(res => ({ user: res.user, error: null }))
+        .catch(err => ({ user: null, error: err })),
+      findRegisteredUserFirestoreOnly(cleanEmail)
+    ]);
+
+    const firebaseUser = authResult.user;
+    const authError = authResult.error;
+    const isWrongPasswordErr = authError && (authError.code === 'auth/wrong-password' || authError.code === 'auth/invalid-credential');
+
+    const isRegistered = !!(firestoreUser || firebaseUser || isWrongPasswordErr);
+
+    if (!isRegistered) {
+      const notRegErr = new Error('USER_NOT_REGISTERED');
+      notRegErr.code = 'USER_NOT_REGISTERED';
+      throw notRegErr;
+    }
+
+    if (firebaseUser) {
+      let cloudProfile = firestoreUser || {
+        uid: firebaseUser.uid,
+        email: cleanEmail,
+        username: cleanEmail.split('@')[0],
+        displayName: firebaseUser.displayName || cleanEmail.split('@')[0],
+        avatarUrl: firebaseUser.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${cleanEmail.split('@')[0]}`,
+        createdAt: new Date().toISOString()
+      };
+
+      setCurrentUser(firebaseUser);
+      setUserProfile(cloudProfile);
+      saveUserToRegistry(cloudProfile);
+      return cloudProfile;
+    }
+
     if (firestoreUser) {
       if (firestoreUser.password && firestoreUser.password !== password) {
         const wrongErr = new Error('Incorrect password. Please try again.');
         wrongErr.code = 'WRONG_PASSWORD';
         throw wrongErr;
       }
-
       setCurrentUser(firestoreUser);
       setUserProfile(firestoreUser);
       saveUserToRegistry(firestoreUser);
       return firestoreUser;
     }
 
-    // Password incorrect for registered user
     const wrongErr = new Error('Incorrect password. Please try again.');
     wrongErr.code = 'WRONG_PASSWORD';
     throw wrongErr;
@@ -274,9 +311,7 @@ export function AuthProvider({ children }) {
   const logout = async () => {
     try {
       await signOut(auth);
-    } catch {
-      // ignore
-    }
+    } catch {}
     setCurrentUser(null);
     setUserProfile(null);
     localStorage.removeItem(SESSION_PROFILE_KEY);
@@ -287,10 +322,27 @@ export function AuthProvider({ children }) {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user && !userProfile) {
         setCurrentUser(user);
-        const profile = await fetchUserProfileQuick(user.uid);
+        let profile = await fetchUserProfileQuick(user.uid);
+        if (!profile && user.email) {
+          profile = findLocalUserSync(user.email);
+        }
+        if (!profile && user.email) {
+          profile = await findRegisteredUserFirestoreOnly(user.email);
+        }
+        if (!profile && user.email) {
+          const usernameFromEmail = user.email.split('@')[0];
+          profile = {
+            uid: user.uid,
+            email: user.email.trim().toLowerCase(),
+            username: usernameFromEmail,
+            displayName: user.displayName || usernameFromEmail,
+            avatarUrl: user.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${usernameFromEmail}`,
+            createdAt: new Date().toISOString()
+          };
+        }
         if (profile) {
-          if (user.photoURL) profile.avatarUrl = user.photoURL;
           setUserProfile(profile);
+          saveUserToRegistry(profile);
         }
       }
     });

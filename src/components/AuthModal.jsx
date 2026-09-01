@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Sparkles, User, Mail, Lock, ArrowRight, AlertCircle, CheckCircle2, Eye, EyeOff } from 'lucide-react';
+import { Sparkles, User, Mail, Lock, ArrowRight, AlertCircle, CheckCircle2, Eye, EyeOff, Loader2 } from 'lucide-react';
 
 export default function AuthModal({ onLoginSuccess }) {
   const { signUp, signIn } = useAuth();
@@ -24,9 +24,13 @@ export default function AuthModal({ onLoginSuccess }) {
     try {
       if (mode === 'register') {
         if (!displayName.trim()) throw new Error('Full Name is required.');
+        // Add a smooth 500ms visual loading transition delay
+        await new Promise(resolve => setTimeout(resolve, 500));
         await signUp(email, password, displayName);
         if (onLoginSuccess) onLoginSuccess();
       } else {
+        // Add a smooth 500ms visual loading transition delay
+        await new Promise(resolve => setTimeout(resolve, 500));
         await signIn(email, password);
         if (onLoginSuccess) onLoginSuccess();
       }
@@ -180,8 +184,17 @@ export default function AuthModal({ onLoginSuccess }) {
             disabled={isSubmitting}
             className="w-full mt-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold py-3 px-6 rounded-full transition-all shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2 group text-xs active:scale-[0.99]"
           >
-            <span>{mode === 'login' ? 'Sign In to Stella' : 'Create Account'}</span>
-            <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+            {isSubmitting ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin text-white" />
+                <span>{mode === 'login' ? 'Signing In...' : 'Creating Account...'}</span>
+              </>
+            ) : (
+              <>
+                <span>{mode === 'login' ? 'Sign In to Stella' : 'Create Account'}</span>
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+              </>
+            )}
           </button>
         </form>
       </div>
