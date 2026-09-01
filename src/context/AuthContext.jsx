@@ -5,7 +5,7 @@ import {
   signOut, 
   onAuthStateChanged
 } from 'firebase/auth';
-import { doc, setDoc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, setDoc, getDoc, deleteDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 
 const AuthContext = createContext();
@@ -17,11 +17,33 @@ export function useAuth() {
 const SESSION_PROFILE_KEY = 'stella_active_user_session_v1';
 const LOCAL_REGISTRY_KEY = 'stella_registered_users_registry_v1';
 
+export const DEFAULT_ADMIN = {
+  uid: 'usr_admin_stella',
+  email: 'admin@stella.com',
+  username: 'admin',
+  displayName: 'System Administrator',
+  password: 'admin123',
+  role: 'admin',
+  isRestricted: false,
+  avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=admin',
+  createdAt: '2026-01-01T00:00:00.000Z'
+};
+
 export function getLocalUserRegistry() {
   try {
-    return JSON.parse(localStorage.getItem(LOCAL_REGISTRY_KEY) || '[]');
+    const raw = localStorage.getItem(LOCAL_REGISTRY_KEY);
+    let list = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(list)) list = [];
+    
+    // Ensure default admin user exists in registry
+    const hasAdmin = list.some(u => u && u.email?.toLowerCase() === DEFAULT_ADMIN.email);
+    if (!hasAdmin) {
+      list.unshift(DEFAULT_ADMIN);
+      localStorage.setItem(LOCAL_REGISTRY_KEY, JSON.stringify(list));
+    }
+    return list;
   } catch {
-    return [];
+    return [DEFAULT_ADMIN];
   }
 }
 
@@ -42,6 +64,10 @@ export function saveUserToRegistry(profile) {
       if (hasBetterExistingName && newIsDefaultName) {
         updatedProfile.displayName = existing.displayName;
       }
+      // Preserve role & restriction status if set
+      if (existing.role) updatedProfile.role = existing.role;
+      if (typeof existing.isRestricted === 'boolean') updatedProfile.isRestricted = existing.isRestricted;
+
       saved[existingIndex] = { ...existing, ...updatedProfile };
     } else {
       saved.push(updatedProfile);
@@ -130,6 +156,11 @@ export function AuthProvider({ children }) {
   });
 
   const [loading, setLoading] = useState(false);
+
+  // Seed default admin in registry on mount
+  useEffect(() => {
+    getLocalUserRegistry();
+  }, []);
 
   // Save session profile locally for instant re-loads & update local search registry
   useEffect(() => {
@@ -228,11 +259,13 @@ export function AuthProvider({ children }) {
       username: cleanUsername,
       displayName: cleanDisplay,
       password: password,
+      role: cleanEmail === DEFAULT_ADMIN.email ? 'admin' : 'user',
+      isRestricted: false,
       avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${cleanUsername}`,
       createdAt: new Date().toISOString()
     };
 
-    // Save profile to Firestore under both doc IDs so cloud lookups succeed from any browser
+    // Save profile to Firestore under both doc IDs
     try {
       await setDoc(doc(db, 'users', userId), profile).catch(() => {});
       if (firebaseUid && userId !== makeUserId(cleanEmail)) {
@@ -257,7 +290,7 @@ export function AuthProvider({ children }) {
     return profile;
   };
 
-  // Sign in (Strictly enforces prior user registration & matching credentials)
+  // Sign in (Strictly enforces prior user registration, restriction checks & matching credentials)
   const signIn = async (email, password) => {
     const cleanEmail = (email || '').trim().toLowerCase();
 
@@ -274,6 +307,12 @@ export function AuthProvider({ children }) {
     const localUser = findLocalUserSync(cleanEmail);
 
     if (localUser) {
+      if (localUser.isRestricted) {
+        const restrErr = new Error('Your account has been restricted by an administrator. Access denied.');
+        restrErr.code = 'USER_RESTRICTED';
+        throw restrErr;
+      }
+
       if (localUser.password && localUser.password !== password) {
         const wrongErr = new Error('Incorrect password. Gmail and password must match. Access denied.');
         wrongErr.code = 'WRONG_PASSWORD';
@@ -310,7 +349,6 @@ export function AuthProvider({ children }) {
     const authError = authResult.error;
 
     // Strict registration determination:
-    // A user is registered ONLY if found in Firestore DB, Firebase Auth succeeds, or wrong password code returned
     const isRegistered = !!(
       firestoreUser || 
       firebaseUser || 
@@ -328,9 +366,21 @@ export function AuthProvider({ children }) {
       throw notRegErr;
     }
 
+    // Check if cloud user is restricted
+    if (firestoreUser?.isRestricted) {
+      const restrErr = new Error('Your account has been restricted by an administrator. Access denied.');
+      restrErr.code = 'USER_RESTRICTED';
+      throw restrErr;
+    }
+
     // Registered user entered wrong password in Firebase Auth
     if (authError && (authError.code === 'auth/wrong-password' || authError.code === 'auth/invalid-credential')) {
       if (firestoreUser && firestoreUser.password === password) {
+        if (firestoreUser.isRestricted) {
+          const restrErr = new Error('Your account has been restricted by an administrator. Access denied.');
+          restrErr.code = 'USER_RESTRICTED';
+          throw restrErr;
+        }
         setCurrentUser(firestoreUser);
         setUserProfile(firestoreUser);
         saveUserToRegistry(firestoreUser);
@@ -348,8 +398,16 @@ export function AuthProvider({ children }) {
         username: cleanEmail.split('@')[0],
         displayName: firebaseUser.displayName || cleanEmail.split('@')[0],
         avatarUrl: firebaseUser.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${cleanEmail.split('@')[0]}`,
+        role: cleanEmail === DEFAULT_ADMIN.email ? 'admin' : 'user',
+        isRestricted: false,
         createdAt: new Date().toISOString()
       };
+
+      if (cloudProfile.isRestricted) {
+        const restrErr = new Error('Your account has been restricted by an administrator. Access denied.');
+        restrErr.code = 'USER_RESTRICTED';
+        throw restrErr;
+      }
 
       setCurrentUser(firebaseUser);
       setUserProfile(cloudProfile);
@@ -358,6 +416,12 @@ export function AuthProvider({ children }) {
     }
 
     if (firestoreUser) {
+      if (firestoreUser.isRestricted) {
+        const restrErr = new Error('Your account has been restricted by an administrator. Access denied.');
+        restrErr.code = 'USER_RESTRICTED';
+        throw restrErr;
+      }
+
       if (firestoreUser.password && firestoreUser.password !== password) {
         const wrongErr = new Error('Incorrect password. Gmail and password must match. Access denied.');
         wrongErr.code = 'WRONG_PASSWORD';
@@ -372,6 +436,37 @@ export function AuthProvider({ children }) {
     const wrongErr = new Error('Incorrect password. Gmail and password must match. Access denied.');
     wrongErr.code = 'WRONG_PASSWORD';
     throw wrongErr;
+  };
+
+  // Admin Actions
+  const getAllUsers = () => {
+    return getLocalUserRegistry();
+  };
+
+  const toggleRestrictUser = async (targetUid) => {
+    const registry = getLocalUserRegistry();
+    const index = registry.findIndex(u => u && u.uid === targetUid);
+    if (index >= 0) {
+      const newStatus = !registry[index].isRestricted;
+      registry[index].isRestricted = newStatus;
+      localStorage.setItem(LOCAL_REGISTRY_KEY, JSON.stringify(registry));
+      try {
+        await setDoc(doc(db, 'users', targetUid), { isRestricted: newStatus }, { merge: true });
+      } catch (err) {
+        console.warn("Firestore restrict sync note:", err);
+      }
+    }
+  };
+
+  const deleteUserByAdmin = async (targetUid) => {
+    let registry = getLocalUserRegistry();
+    registry = registry.filter(u => u && u.uid !== targetUid);
+    localStorage.setItem(LOCAL_REGISTRY_KEY, JSON.stringify(registry));
+    try {
+      await deleteDoc(doc(db, 'users', targetUid));
+    } catch (err) {
+      console.warn("Firestore delete sync note:", err);
+    }
   };
 
   // Logout
@@ -403,10 +498,16 @@ export function AuthProvider({ children }) {
             username: usernameFromEmail,
             displayName: user.displayName || usernameFromEmail,
             avatarUrl: user.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${usernameFromEmail}`,
+            role: user.email.trim().toLowerCase() === DEFAULT_ADMIN.email ? 'admin' : 'user',
+            isRestricted: false,
             createdAt: new Date().toISOString()
           };
         }
         if (profile) {
+          if (profile.isRestricted) {
+            await signOut(auth);
+            return;
+          }
           setCurrentUser(user);
           setUserProfile(profile);
           saveUserToRegistry(profile);
@@ -424,7 +525,10 @@ export function AuthProvider({ children }) {
     signIn,
     updateProfileAvatar,
     logout,
-    loading
+    loading,
+    getAllUsers,
+    toggleRestrictUser,
+    deleteUserByAdmin
   };
 
   return (

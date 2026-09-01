@@ -7,6 +7,7 @@ import Calendar from './components/Calendar';
 import DailyModal from './components/DailyModal';
 import ChallengeSetup from './components/ChallengeSetup';
 import FriendDashboard from './components/FriendDashboard';
+import AdminDashboard from './components/AdminDashboard';
 import AuthModal from './components/AuthModal';
 import { useCalendarData } from './hooks/useCalendarData';
 import { getMonthsInRange } from './utils/dateUtils';
@@ -89,6 +90,7 @@ export default function App() {
         getChallengeSummary={getChallengeSummary}
         onSelectFriend={(friend) => setSelectedFriendUser(friend)}
         activeFriendUser={selectedFriendUser}
+        onSelectAdmin={() => { setSelectedFriendUser(null); setViewMode('admin'); }}
         isOpenMobile={isOpenMobileSidebar}
         onCloseMobile={() => setIsOpenMobileSidebar(false)}
       />
@@ -98,13 +100,20 @@ export default function App() {
         {/* Top Header */}
         <Header
           activeChallenge={selectedFriendUser ? { name: `${selectedFriendUser.displayName || selectedFriendUser.email}'s Profile` } : activeChallenge}
+          viewMode={viewMode}
+          onToggleAdmin={() => { setSelectedFriendUser(null); setViewMode(prev => prev === 'admin' ? 'calendar' : 'admin'); }}
           onToggleMobileSidebar={() => setIsOpenMobileSidebar(prev => !prev)}
           onClearAll={clearAllData}
         />
 
         {/* Main Content Area */}
         <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-6">
-          {selectedFriendUser ? (
+          {viewMode === 'admin' && userProfile?.role === 'admin' ? (
+            /* Admin Control Panel View */
+            <AdminDashboard
+              onBackToDashboard={() => setViewMode(challenges.length > 0 ? 'calendar' : 'create')}
+            />
+          ) : selectedFriendUser ? (
             /* Friend's Read-Only Dashboard */
             <FriendDashboard
               friendUser={selectedFriendUser}
@@ -160,7 +169,7 @@ export default function App() {
         </main>
 
         {/* Daily Detail View Modal */}
-        {selectedDate && activeChallenge && !selectedFriendUser && (
+        {selectedDate && activeChallenge && !selectedFriendUser && viewMode !== 'admin' && (
           <DailyModal
             dateStr={selectedDate}
             dayData={getDayData(selectedDate)}
@@ -187,7 +196,10 @@ export default function App() {
             </div>
             <div className="flex items-center gap-3">
               {userProfile && (
-                <span className="text-[11px] text-gray-400">Signed in as {userProfile.displayName || userProfile.email} ({userProfile.email})</span>
+                <span className="text-[11px] text-gray-400">
+                  Signed in as {userProfile.displayName || userProfile.email} ({userProfile.email})
+                  {userProfile.role === 'admin' && <strong className="text-indigo-400 ml-1.5">[Admin]</strong>}
+                </span>
               )}
             </div>
           </div>

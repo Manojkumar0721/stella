@@ -5,7 +5,7 @@ import {
 } from '../services/socialService';
 import ProfileModal from './ProfileModal';
 import { 
-  Sparkles, Plus, Calendar, Trash2, X, Search, UserPlus, Users, Check, Bell, LogOut, CheckCircle2 
+  Sparkles, Plus, Calendar, Trash2, X, Search, UserPlus, Users, Check, Bell, LogOut, CheckCircle2, Shield 
 } from 'lucide-react';
 
 export default function Sidebar({
@@ -18,6 +18,7 @@ export default function Sidebar({
   getChallengeSummary,
   onSelectFriend,
   activeFriendUser,
+  onSelectAdmin,
   isOpenMobile,
   onCloseMobile
 }) {
@@ -53,7 +54,7 @@ export default function Sidebar({
     return () => clearInterval(interval);
   }, [userProfile]);
 
-  // Search Users Effect (Immediate loading on modal open or typing)
+  // Search Users Effect
   useEffect(() => {
     if (!showSearchModal || !userProfile) {
       setSearchResults([]);
@@ -126,8 +127,27 @@ export default function Sidebar({
         )}
       </div>
 
-      {/* Primary Actions: New Challenge & Search Users */}
+      {/* Primary Actions: Admin Panel Button, New Challenge & Search Users */}
       <div className="p-3 space-y-2 border-b border-neutral-800/40">
+        {userProfile?.role === 'admin' && (
+          <button
+            onClick={() => { if (onSelectAdmin) onSelectAdmin(); if (onCloseMobile) onCloseMobile(); }}
+            className={`w-full py-2.5 px-4 rounded-full font-medium text-xs transition-all duration-200 flex items-center justify-between border ${
+              viewMode === 'admin'
+                ? 'bg-indigo-600 text-white font-bold shadow-lg shadow-indigo-500/20 border-indigo-400'
+                : 'bg-indigo-950/40 hover:bg-indigo-900/50 text-indigo-300 border-indigo-800/40'
+            }`}
+          >
+            <span className="flex items-center gap-2">
+              <Shield className="w-4 h-4 text-indigo-400" />
+              <span>Admin Panel</span>
+            </span>
+            <span className="bg-indigo-500/20 text-indigo-200 text-[10px] font-mono px-2 py-0.5 rounded-full border border-indigo-400/30 font-bold">
+              Admin
+            </span>
+          </button>
+        )}
+
         <button
           onClick={handleCreateNew}
           className={`w-full py-2.5 px-4 rounded-full font-medium text-xs transition-all duration-200 flex items-center gap-2.5 group border border-neutral-700/30 ${
@@ -293,8 +313,11 @@ export default function Sidebar({
                 className="w-8 h-8 rounded-full bg-[#282a2c] p-0.5 border border-neutral-700/40 shrink-0"
               />
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-bold text-gray-100 truncate leading-tight">
-                  {userProfile.displayName || userProfile.email}
+                <p className="text-xs font-bold text-gray-100 truncate leading-tight flex items-center gap-1">
+                  <span>{userProfile.displayName || userProfile.email}</span>
+                  {userProfile.role === 'admin' && (
+                    <span className="text-[9px] bg-indigo-500/20 text-indigo-300 px-1.5 py-0.2 rounded font-mono font-bold">Admin</span>
+                  )}
                 </p>
                 <p className="text-[10px] text-gray-400 truncate leading-tight font-medium">
                   {userProfile.email}
