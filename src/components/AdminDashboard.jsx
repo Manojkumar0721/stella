@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth, DEFAULT_ADMIN } from '../context/AuthContext';
+import { useAuth, DEFAULT_ADMIN, DEFAULT_ADMIN_ALT } from '../context/AuthContext';
 import { 
-  Shield, ShieldAlert, ShieldCheck, Trash2, Search, Users, UserX, UserCheck, Key, Lock, Unlock, AlertTriangle, CheckCircle2, ArrowLeft, RefreshCw 
+  Shield, Trash2, Search, Users, UserX, UserCheck, Lock, Unlock, AlertTriangle, CheckCircle2, ArrowLeft, RefreshCw 
 } from 'lucide-react';
 
 export default function AdminDashboard({ onBackToDashboard }) {
@@ -21,9 +21,18 @@ export default function AdminDashboard({ onBackToDashboard }) {
     loadUsers();
   }, []);
 
+  const isSystemAdmin = (user) => {
+    if (!user) return false;
+    return (
+      user.role === 'admin' || 
+      user.email === DEFAULT_ADMIN.email || 
+      user.email === DEFAULT_ADMIN_ALT.email
+    );
+  };
+
   const handleToggleRestrict = async (user) => {
-    if (user.email === DEFAULT_ADMIN.email || user.uid === userProfile?.uid) {
-      alert("Administrator accounts cannot be restricted.");
+    if (isSystemAdmin(user) || user.uid === userProfile?.uid) {
+      alert("System administrator accounts cannot be restricted.");
       return;
     }
     const isNowRestricted = !user.isRestricted;
@@ -35,8 +44,8 @@ export default function AdminDashboard({ onBackToDashboard }) {
 
   const handleDeleteConfirm = async () => {
     if (!selectedUserForDelete) return;
-    if (selectedUserForDelete.email === DEFAULT_ADMIN.email || selectedUserForDelete.uid === userProfile?.uid) {
-      alert("Administrator accounts cannot be deleted.");
+    if (isSystemAdmin(selectedUserForDelete) || selectedUserForDelete.uid === userProfile?.uid) {
+      alert("System administrator accounts cannot be deleted.");
       setSelectedUserForDelete(null);
       return;
     }
@@ -63,7 +72,6 @@ export default function AdminDashboard({ onBackToDashboard }) {
   const totalUsers = usersList.length;
   const activeCount = usersList.filter(u => u && !u.isRestricted).length;
   const restrictedCount = usersList.filter(u => u && u.isRestricted).length;
-  const adminCount = usersList.filter(u => u && u.role === 'admin').length;
 
   return (
     <div className="space-y-6 animate-fade-in font-sans">
@@ -79,11 +87,11 @@ export default function AdminDashboard({ onBackToDashboard }) {
               <div className="flex items-center gap-2">
                 <h1 className="text-lg sm:text-xl font-bold text-white tracking-tight">Admin Control Panel</h1>
                 <span className="bg-blue-500/20 text-blue-300 border border-blue-500/30 text-[10px] font-mono px-2.5 py-0.5 rounded-full font-bold uppercase">
-                  Super Admin
+                  User Management
                 </span>
               </div>
               <p className="text-xs text-gray-400 mt-0.5">
-                Manage registered Stella users, monitor system accounts, restrict access, or delete users.
+                Restrict access or permanently delete user accounts from the application.
               </p>
             </div>
           </div>
@@ -108,11 +116,11 @@ export default function AdminDashboard({ onBackToDashboard }) {
         </div>
       )}
 
-      {/* Admin Statistics Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+      {/* User Statistics Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         <div className="bg-[#1e1f20] border border-neutral-800/80 p-4 rounded-2xl space-y-1 shadow-sm">
           <div className="flex items-center justify-between text-gray-400">
-            <span className="text-xs font-medium">Total Users</span>
+            <span className="text-xs font-medium">Total Registered Users</span>
             <Users className="w-4 h-4 text-blue-400" />
           </div>
           <p className="text-2xl font-extrabold text-white">{totalUsers}</p>
@@ -128,36 +136,11 @@ export default function AdminDashboard({ onBackToDashboard }) {
 
         <div className="bg-[#1e1f20] border border-neutral-800/80 p-4 rounded-2xl space-y-1 shadow-sm">
           <div className="flex items-center justify-between text-gray-400">
-            <span className="text-xs font-medium">Restricted Users</span>
+            <span className="text-xs font-medium">Restricted Accounts</span>
             <UserX className="w-4 h-4 text-rose-400" />
           </div>
           <p className="text-2xl font-extrabold text-rose-400">{restrictedCount}</p>
         </div>
-
-        <div className="bg-[#1e1f20] border border-neutral-800/80 p-4 rounded-2xl space-y-1 shadow-sm">
-          <div className="flex items-center justify-between text-gray-400">
-            <span className="text-xs font-medium">Admins</span>
-            <ShieldCheck className="w-4 h-4 text-indigo-400" />
-          </div>
-          <p className="text-2xl font-extrabold text-indigo-400">{adminCount}</p>
-        </div>
-      </div>
-
-      {/* Default Credentials Info Box */}
-      <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
-        <div className="flex items-center gap-2.5">
-          <Key className="w-4 h-4 text-blue-400 shrink-0" />
-          <div>
-            <span className="font-bold text-blue-300">Default Admin Credentials: </span>
-            <code className="bg-[#131314] px-2 py-0.5 rounded border border-neutral-700 font-mono text-gray-200">admin@stella.com</code>
-            <span className="text-gray-400 mx-1 border-r border-neutral-700"></span>
-            <span className="text-gray-400">Password: </span>
-            <code className="bg-[#131314] px-2 py-0.5 rounded border border-neutral-700 font-mono text-gray-200">admin123</code>
-          </div>
-        </div>
-        <span className="text-[10px] text-gray-400 bg-[#1e1f20] px-2.5 py-1 rounded-full border border-neutral-800 shrink-0">
-          Admin Portal Active
-        </span>
       </div>
 
       {/* Search & Filter Toolbar */}
@@ -224,7 +207,6 @@ export default function AdminDashboard({ onBackToDashboard }) {
               <thead>
                 <tr className="bg-[#131314] text-gray-400 border-b border-neutral-800 font-semibold">
                   <th className="py-3 px-4">User</th>
-                  <th className="py-3 px-4">Role</th>
                   <th className="py-3 px-4">Status</th>
                   <th className="py-3 px-4">Joined Date</th>
                   <th className="py-3 px-4 text-right">Actions</th>
@@ -232,7 +214,7 @@ export default function AdminDashboard({ onBackToDashboard }) {
               </thead>
               <tbody className="divide-y divide-neutral-800/60">
                 {filteredUsers.map((user) => {
-                  const isAdmin = user.role === 'admin' || user.email === DEFAULT_ADMIN.email;
+                  const isAdmin = isSystemAdmin(user);
                   const isRestricted = !!user.isRestricted;
                   const isSelf = user.uid === userProfile?.uid;
 
@@ -252,24 +234,13 @@ export default function AdminDashboard({ onBackToDashboard }) {
                               {isSelf && (
                                 <span className="bg-blue-500/20 text-blue-300 text-[9px] px-1.5 py-0.5 rounded font-mono">You</span>
                               )}
+                              {isAdmin && (
+                                <span className="bg-indigo-500/20 text-indigo-300 text-[9px] px-1.5 py-0.5 rounded font-mono">Admin</span>
+                              )}
                             </p>
                             <p className="text-[11px] text-gray-400 font-mono truncate">{user.email}</p>
                           </div>
                         </div>
-                      </td>
-
-                      {/* Role */}
-                      <td className="py-3.5 px-4">
-                        {isAdmin ? (
-                          <span className="inline-flex items-center gap-1 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-[10px] font-bold px-2.5 py-0.5 rounded-full">
-                            <Shield className="w-3 h-3" />
-                            <span>Admin</span>
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 bg-neutral-800 text-gray-300 text-[10px] font-medium px-2.5 py-0.5 rounded-full">
-                            <span>User</span>
-                          </span>
-                        )}
                       </td>
 
                       {/* Status */}
@@ -300,12 +271,12 @@ export default function AdminDashboard({ onBackToDashboard }) {
                             type="button"
                             disabled={isAdmin}
                             onClick={() => handleToggleRestrict(user)}
-                            className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed ${
+                            className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed ${
                               isRestricted
                                 ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-md'
                                 : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30'
                             }`}
-                            title={isAdmin ? "Admin accounts cannot be restricted" : isRestricted ? "Unrestrict user access" : "Restrict user access"}
+                            title={isAdmin ? "System administrator accounts cannot be restricted" : isRestricted ? "Unrestrict user access" : "Restrict user access"}
                           >
                             {isRestricted ? (
                               <>
@@ -326,7 +297,7 @@ export default function AdminDashboard({ onBackToDashboard }) {
                             disabled={isAdmin}
                             onClick={() => setSelectedUserForDelete(user)}
                             className="p-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 rounded-full transition-all disabled:opacity-40 disabled:cursor-not-allowed active:scale-95"
-                            title={isAdmin ? "Admin accounts cannot be deleted" : "Delete user permanently"}
+                            title={isAdmin ? "System administrator accounts cannot be deleted" : "Delete user permanently"}
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -348,7 +319,7 @@ export default function AdminDashboard({ onBackToDashboard }) {
 
       {/* Delete User Confirmation Modal */}
       {selectedUserForDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in overflow-hidden">
           <div className="w-full max-w-sm bg-[#1e1f20] border border-neutral-800/80 rounded-3xl p-6 shadow-2xl space-y-4 text-center">
             <div className="w-12 h-12 rounded-full bg-rose-500/20 border border-rose-500/30 text-rose-400 flex items-center justify-center mx-auto">
               <AlertTriangle className="w-6 h-6" />
@@ -359,7 +330,7 @@ export default function AdminDashboard({ onBackToDashboard }) {
               <p className="text-xs text-gray-400">
                 Are you sure you want to permanently delete <strong className="text-gray-200">{selectedUserForDelete.displayName || selectedUserForDelete.email}</strong> (<span className="font-mono text-gray-300">{selectedUserForDelete.email}</span>)?
               </p>
-              <p className="text-[11px] text-rose-400 font-medium pt-1">This action cannot be undone.</p>
+              <p className="text-[11px] text-rose-400 font-medium pt-1">This user will be permanently removed from the system.</p>
             </div>
 
             <div className="flex items-center gap-2 pt-2">

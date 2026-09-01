@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useAuth, DEFAULT_ADMIN } from '../context/AuthContext';
-import { Sparkles, User, Mail, Lock, ArrowRight, AlertCircle, CheckCircle2, Eye, EyeOff, Loader2, Shield } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { Sparkles, User, Mail, Lock, ArrowRight, AlertCircle, CheckCircle2, Eye, EyeOff, Loader2 } from 'lucide-react';
 
 export default function AuthModal({ onLoginSuccess }) {
   const { signUp, signIn } = useAuth();
@@ -23,14 +23,6 @@ export default function AuthModal({ onLoginSuccess }) {
       containerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
     }
   }, [mode, error, successMsg]);
-
-  const handleFillAdminCredentials = () => {
-    setMode('login');
-    setEmail(DEFAULT_ADMIN.email);
-    setPassword(DEFAULT_ADMIN.password);
-    setError('');
-    setSuccessMsg('Filled default admin credentials. Click Sign In to access Admin Panel.');
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -91,10 +83,10 @@ export default function AuthModal({ onLoginSuccess }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in font-sans">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in font-sans overflow-hidden">
       <div 
         ref={containerRef}
-        className="relative w-full max-w-md bg-[#1e1f20] border border-neutral-800/80 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto custom-scrollbar scroll-smooth"
+        className="relative w-full max-w-md bg-[#1e1f20] border border-neutral-800/80 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto overflow-x-hidden [scrollbar-width:none] [ms-overflow-style:none] [&::-webkit-scrollbar]:hidden scroll-smooth"
       >
         {/* Animated Progress Buffer Track */}
         {isSubmitting && (
@@ -248,26 +240,6 @@ export default function AuthModal({ onLoginSuccess }) {
             )}
           </button>
         </form>
-
-        {/* Admin Demo Login Quick Fill Box */}
-        <div className="pt-2 border-t border-neutral-800/60">
-          <div className="bg-[#131314] p-3 rounded-2xl border border-neutral-800 flex items-center justify-between gap-2 text-xs">
-            <div className="flex items-center gap-2 min-w-0">
-              <Shield className="w-4 h-4 text-indigo-400 shrink-0" />
-              <div className="min-w-0">
-                <p className="font-semibold text-gray-200 text-[11px] truncate">Admin Login</p>
-                <p className="text-[10px] text-gray-400 truncate font-mono">admin@stella.com / admin123</p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={handleFillAdminCredentials}
-              className="bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 px-3 py-1 rounded-full text-[10px] font-bold transition-all shrink-0 active:scale-95"
-            >
-              Fill Admin
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );
