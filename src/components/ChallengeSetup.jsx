@@ -1,42 +1,13 @@
 import React, { useState } from 'react';
 import { Calendar as CalendarIcon, Sparkles, Rocket, ArrowRight, Target, AlertCircle, ArrowLeft, CalendarDays } from 'lucide-react';
-import { formatDateString } from '../utils/dateUtils';
 import DateRangePickerModal from './DateRangePickerModal';
 
 export default function ChallengeSetup({ onCreateChallenge, onCancel, hasExistingChallenges }) {
-  const [challengeName, setChallengeName] = useState('September – November 2026 Challenge');
+  const [challengeName, setChallengeName] = useState('New Custom Challenge');
   const [startDate, setStartDate] = useState('2026-09-01');
   const [endDate, setEndDate] = useState('2026-11-30');
   const [errorMsg, setErrorMsg] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
-
-  // Preset handlers
-  const setPresetSepNov2026 = () => {
-    setChallengeName('September – November 2026 Challenge');
-    setStartDate('2026-09-01');
-    setEndDate('2026-11-30');
-    setErrorMsg('');
-  };
-
-  const setPreset30Days = () => {
-    const start = new Date();
-    const end = new Date();
-    end.setDate(end.getDate() + 30);
-    setChallengeName('30-Day Sprint');
-    setStartDate(formatDateString(start.getFullYear(), start.getMonth(), start.getDate()));
-    setEndDate(formatDateString(end.getFullYear(), end.getMonth(), end.getDate()));
-    setErrorMsg('');
-  };
-
-  const setPreset60Days = () => {
-    const start = new Date();
-    const end = new Date();
-    end.setDate(end.getDate() + 60);
-    setChallengeName('60-Day Goal Tracker');
-    setStartDate(formatDateString(start.getFullYear(), start.getMonth(), start.getDate()));
-    setEndDate(formatDateString(end.getFullYear(), end.getMonth(), end.getDate()));
-    setErrorMsg('');
-  };
 
   const calculateDays = () => {
     if (!startDate || !endDate) return 0;
@@ -111,55 +82,8 @@ export default function ChallengeSetup({ onCreateChallenge, onCancel, hasExistin
           </h1>
 
           <p className="text-sm text-gray-400 leading-relaxed">
-            Define a date range and title for your challenge to track daily tasks in Stella.
+            Define a title and date range for your challenge to track daily tasks in Stella.
           </p>
-        </div>
-
-        {/* Quick Presets */}
-        <div className="space-y-2">
-          <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-            Quick Presets
-          </label>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <button
-              type="button"
-              onClick={setPresetSepNov2026}
-              className={`p-3.5 rounded-2xl border text-xs font-medium transition-all text-left flex flex-col justify-between ${
-                startDate === '2026-09-01' && endDate === '2026-11-30'
-                  ? 'bg-[#282a2c] border-blue-500/60 text-white ring-1 ring-blue-500/40'
-                  : 'bg-[#131314] border-neutral-800 text-gray-300 hover:bg-[#282a2c]/60'
-              }`}
-            >
-              <span className="font-bold text-gray-100">Sep – Nov 2026</span>
-              <span className="text-[11px] text-gray-400 mt-1">90-Day Quarter</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={setPreset30Days}
-              className={`p-3.5 rounded-2xl border text-xs font-medium transition-all text-left flex flex-col justify-between ${
-                challengeName === '30-Day Sprint'
-                  ? 'bg-[#282a2c] border-blue-500/60 text-white ring-1 ring-blue-500/40'
-                  : 'bg-[#131314] border-neutral-800 text-gray-300 hover:bg-[#282a2c]/60'
-              }`}
-            >
-              <span className="font-bold text-gray-100">30-Day Sprint</span>
-              <span className="text-[11px] text-gray-400 mt-1">1 Month Goal</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={setPreset60Days}
-              className={`p-3.5 rounded-2xl border text-xs font-medium transition-all text-left flex flex-col justify-between ${
-                challengeName === '60-Day Goal Tracker'
-                  ? 'bg-[#282a2c] border-blue-500/60 text-white ring-1 ring-blue-500/40'
-                  : 'bg-[#131314] border-neutral-800 text-gray-300 hover:bg-[#282a2c]/60'
-              }`}
-            >
-              <span className="font-bold text-gray-100">60-Day Tracker</span>
-              <span className="text-[11px] text-gray-400 mt-1">2 Month Habit</span>
-            </button>
-          </div>
         </div>
 
         {/* Form */}

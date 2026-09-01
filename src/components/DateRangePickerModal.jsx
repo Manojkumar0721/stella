@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, X, Check, Sparkles, Clock } from 'lucide-react';
-import { formatDateString, getMonthGridDays, WEEKDAYS } from '../utils/dateUtils';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, X, Check } from 'lucide-react';
+import { getMonthGridDays, WEEKDAYS } from '../utils/dateUtils';
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -60,49 +60,6 @@ export default function DateRangePickerModal({
       }
       setSelectionStep('start');
     }
-  };
-
-  // Preset Handlers
-  const applySepNov2026 = () => {
-    setStartDate('2026-09-01');
-    setEndDate('2026-11-30');
-    setViewYear(2026);
-    setViewMonth(8);
-  };
-
-  const apply30Days = () => {
-    const start = new Date();
-    const end = new Date();
-    end.setDate(end.getDate() + 30);
-    const startStr = formatDateString(start.getFullYear(), start.getMonth(), start.getDate());
-    const endStr = formatDateString(end.getFullYear(), end.getMonth(), end.getDate());
-    setStartDate(startStr);
-    setEndDate(endStr);
-    setViewYear(start.getFullYear());
-    setViewMonth(start.getMonth());
-  };
-
-  const apply60Days = () => {
-    const start = new Date();
-    const end = new Date();
-    end.setDate(end.getDate() + 60);
-    const startStr = formatDateString(start.getFullYear(), start.getMonth(), start.getDate());
-    const endStr = formatDateString(end.getFullYear(), end.getMonth(), end.getDate());
-    setStartDate(startStr);
-    setEndDate(endStr);
-    setViewYear(start.getFullYear());
-    setViewMonth(start.getMonth());
-  };
-
-  const applyCurrentMonth = () => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth();
-    const lastDay = new Date(year, month + 1, 0).getDate();
-    setStartDate(formatDateString(year, month, 1));
-    setEndDate(formatDateString(year, month, lastDay));
-    setViewYear(year);
-    setViewMonth(month);
   };
 
   // Calculate Duration
@@ -188,39 +145,6 @@ export default function DateRangePickerModal({
           <div className="bg-[#282a2c] px-3 py-1 rounded-full text-gray-300 font-bold font-mono text-[11px] border border-neutral-700/50">
             {totalDays} Days
           </div>
-        </div>
-
-        {/* Quick Presets Bar */}
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mr-1">Presets:</span>
-          <button
-            type="button"
-            onClick={applySepNov2026}
-            className="px-3 py-1.5 rounded-full text-xs font-semibold bg-[#131314] hover:bg-[#282a2c] text-gray-300 border border-neutral-800 transition-all"
-          >
-            Sep – Nov 2026
-          </button>
-          <button
-            type="button"
-            onClick={apply30Days}
-            className="px-3 py-1.5 rounded-full text-xs font-semibold bg-[#131314] hover:bg-[#282a2c] text-gray-300 border border-neutral-800 transition-all"
-          >
-            30 Days
-          </button>
-          <button
-            type="button"
-            onClick={apply60Days}
-            className="px-3 py-1.5 rounded-full text-xs font-semibold bg-[#131314] hover:bg-[#282a2c] text-gray-300 border border-neutral-800 transition-all"
-          >
-            60 Days
-          </button>
-          <button
-            type="button"
-            onClick={applyCurrentMonth}
-            className="px-3 py-1.5 rounded-full text-xs font-semibold bg-[#131314] hover:bg-[#282a2c] text-gray-300 border border-neutral-800 transition-all"
-          >
-            This Month
-          </button>
         </div>
 
         {/* Calendar Grid Container */}
