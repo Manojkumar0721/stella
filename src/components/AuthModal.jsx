@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Sparkles, User, Mail, Lock, ArrowRight, AlertCircle, CheckCircle2, Eye, EyeOff, Loader2 } from 'lucide-react';
 
@@ -15,21 +15,35 @@ export default function AuthModal({ onLoginSuccess }) {
   const [successMsg, setSuccessMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const containerRef = useRef(null);
+
+  // Smooth scroll buffer to top on error or mode change
+  useEffect(() => {
+    if (containerRef.current) {
+      containerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [mode, error]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setSuccessMsg('');
     setIsSubmitting(true);
 
+    // Smooth scroll buffer to top when starting submit
+    if (containerRef.current) {
+      containerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
     try {
       if (mode === 'register') {
         if (!displayName.trim()) throw new Error('Full Name is required.');
-        // Add a smooth 500ms visual loading transition delay
+        // Add a smooth 500ms visual loading transition delay & buffer
         await new Promise(resolve => setTimeout(resolve, 500));
         await signUp(email, password, displayName);
         if (onLoginSuccess) onLoginSuccess();
       } else {
-        // Add a smooth 500ms visual loading transition delay
+        // Add a smooth 500ms visual loading transition delay & buffer
         await new Promise(resolve => setTimeout(resolve, 500));
         await signIn(email, password);
         if (onLoginSuccess) onLoginSuccess();
@@ -51,7 +65,17 @@ export default function AuthModal({ onLoginSuccess }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in font-sans">
-      <div className="relative w-full max-w-md bg-[#1e1f20] border border-neutral-800/80 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-5 overflow-hidden">
+      <div 
+        ref={containerRef}
+        className="relative w-full max-w-md bg-[#1e1f20] border border-neutral-800/80 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto custom-scrollbar scroll-smooth"
+      >
+        {/* Animated Progress Buffer Track */}
+        {isSubmitting && (
+          <div className="absolute top-0 left-0 right-0 h-1 bg-[#131314] overflow-hidden z-20 rounded-t-3xl">
+            <div className="h-full bg-gradient-to-r from-blue-500 via-indigo-400 to-purple-500 animate-pulse w-full"></div>
+          </div>
+        )}
+
         {/* Background Glow */}
         <div className="absolute -top-24 -right-24 w-60 h-60 bg-blue-600/10 rounded-full blur-3xl pointer-events-none"></div>
         <div className="absolute -bottom-24 -left-24 w-60 h-60 bg-purple-600/10 rounded-full blur-3xl pointer-events-none"></div>
