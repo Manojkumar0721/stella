@@ -160,7 +160,7 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // Sign up with Gmail/Email, Password, and Full Name (Zero Latency Instant Response)
+  // Sign up with Gmail/Email, Password, and Full Name
   const signUp = async (email, password, displayName) => {
     const cleanEmail = email.trim().toLowerCase();
     const cleanUsername = cleanEmail.split('@')[0].toLowerCase();
@@ -176,7 +176,7 @@ export function AuthProvider({ children }) {
       throw new Error('Full Name is required.');
     }
 
-    // Fast synchronous local check (0ms)
+    // Check local registry
     const localExisting = findLocalUserSync(cleanEmail);
     if (localExisting) {
       const err = new Error('ALREADY_REGISTERED');
@@ -184,7 +184,7 @@ export function AuthProvider({ children }) {
       throw err;
     }
 
-    // Check cloud Firestore for existing registration
+    // Check cloud Firestore
     const cloudExisting = await findRegisteredUserFirestoreOnly(cleanEmail);
     if (cloudExisting) {
       saveUserToRegistry(cloudExisting);
@@ -193,7 +193,28 @@ export function AuthProvider({ children }) {
       throw err;
     }
 
-    const userId = makeUserId(cleanEmail);
+    let firebaseUid = null;
+    let firebaseUserObj = null;
+
+    try {
+      const res = await createUserWithEmailAndPassword(auth, cleanEmail, password);
+      firebaseUid = res.user.uid;
+      firebaseUserObj = res.user;
+    } catch (err) {
+      if (err.code === 'auth/email-already-in-use') {
+        const alreadyErr = new Error('ALREADY_REGISTERED');
+        alreadyErr.code = 'ALREADY_REGISTERED';
+        throw alreadyErr;
+      } else if (err.code === 'auth/weak-password') {
+        throw new Error('Password should be at least 6 characters.');
+      } else if (err.code === 'auth/invalid-email') {
+        throw new Error('Invalid email address format.');
+      }
+      console.warn("Firebase Auth sign up note:", err);
+    }
+
+    const userId = firebaseUid || makeUserId(cleanEmail);
+
     const profile = {
       uid: userId,
       email: cleanEmail,
@@ -204,35 +225,24 @@ export function AuthProvider({ children }) {
       createdAt: new Date().toISOString()
     };
 
-    // Instant local state update (0ms latency!)
-    saveUserToRegistry(profile);
-    setCurrentUser(profile);
-    setUserProfile(profile);
-
-    // Non-blocking background cloud sync
-    (async () => {
-      try {
-        const res = await createUserWithEmailAndPassword(auth, cleanEmail, password);
-        const finalUid = res?.user?.uid || userId;
-        const cloudProfile = { ...profile, uid: finalUid };
-
-        await setDoc(doc(db, 'users', finalUid), cloudProfile).catch(() => {});
-        if (finalUid !== userId) {
-          await setDoc(doc(db, 'users', userId), cloudProfile).catch(() => {});
-        }
-        saveUserToRegistry(cloudProfile);
-        setUserProfile(prev => (prev && prev.email === cleanEmail ? cloudProfile : prev));
-      } catch (err) {
-        try {
-          await setDoc(doc(db, 'users', userId), profile).catch(() => {});
-        } catch {}
+    // Save profile to Firestore under both doc IDs so cloud lookups succeed from any browser
+    try {
+      await setDoc(doc(db, 'users', userId), profile).catch(() => {});
+      if (firebaseUid && userId !== makeUserId(cleanEmail)) {
+        await setDoc(doc(db, 'users', makeUserId(cleanEmail)), profile).catch(() => {});
       }
-    })();
+    } catch (err) {
+      console.warn("Firestore registration note:", err);
+    }
+
+    saveUserToRegistry(profile);
+    setCurrentUser(firebaseUserObj || profile);
+    setUserProfile(profile);
 
     return profile;
   };
 
-  // Sign in (Strictly enforces user registration on live & local environments)
+  // Sign in (Strictly enforces prior user registration in production & local environments)
   const signIn = async (email, password) => {
     const cleanEmail = email.trim().toLowerCase();
 
@@ -240,7 +250,7 @@ export function AuthProvider({ children }) {
       throw new Error('Please enter both email and password.');
     }
 
-    // Step 1: Instant local registry check (0ms latency!)
+    // Step 1: Check local registry (0ms)
     const localUser = findLocalUserSync(cleanEmail);
 
     if (localUser) {
@@ -250,11 +260,10 @@ export function AuthProvider({ children }) {
         throw wrongErr;
       }
 
-      // Zero Latency Login
       setCurrentUser(localUser);
       setUserProfile(localUser);
 
-      // Background Cloud Authentication & Sync
+      // Async cloud sync
       (async () => {
         try {
           const res = await signInWithEmailAndPassword(auth, cleanEmail, password);
@@ -269,7 +278,7 @@ export function AuthProvider({ children }) {
       return localUser;
     }
 
-    // Step 2: Concurrent cloud checks if not found locally
+    // Step 2: Query Firestore & Firebase Auth concurrently for cloud registration status
     const [authResult, firestoreUser] = await Promise.all([
       signInWithEmailAndPassword(auth, cleanEmail, password)
         .then(res => ({ user: res.user, error: null }))
@@ -280,7 +289,8 @@ export function AuthProvider({ children }) {
     const firebaseUser = authResult.user;
     const authError = authResult.error;
 
-    // Strict registration check: user is registered ONLY if found in Firestore, Firebase Auth succeeds, or explicit wrong-password error code
+    // Strict registration determination for production:
+    // A user is registered ONLY if found in Firestore, Firebase Auth succeeds, or explicit wrong password code is returned
     const isRegistered = !!(firestoreUser || firebaseUser || (authError && authError.code === 'auth/wrong-password'));
 
     if (!isRegistered) {
