@@ -101,18 +101,20 @@ export default function DateRangePickerModal({
       <div className="relative w-full max-w-lg bg-[#1e1f20] border border-neutral-800/90 rounded-3xl p-5 sm:p-7 shadow-2xl space-y-5 max-h-[95vh] overflow-y-auto overflow-x-hidden [scrollbar-width:none] [ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         
         {/* Glow Effects */}
-        <div className="absolute -top-20 -right-20 w-56 h-56 bg-blue-600/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div className="absolute -top-20 -right-20 w-56 h-56 bg-emerald-600/10 rounded-full blur-3xl pointer-events-none"></div>
         <div className="absolute -bottom-20 -left-20 w-56 h-56 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none"></div>
 
         {/* Modal Header */}
         <div className="flex items-center justify-between border-b border-neutral-800 pb-3.5">
           <div className="flex items-center gap-2.5">
-            <div className="p-2.5 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20">
+            <div className="p-2.5 rounded-2xl bg-gradient-to-tr from-emerald-500 via-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20">
               <CalendarIcon className="w-5 h-5" />
             </div>
             <div>
               <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">Select Challenge Date Range</h2>
-              <p className="text-xs text-gray-400">Click dates on the calendar to pick start and end dates</p>
+              <p className="text-xs text-gray-400">
+                {selectionStep === 'start' ? 'Click a date to select the START POINT' : 'Click a date to select the END POINT'}
+              </p>
             </div>
           </div>
 
@@ -124,25 +126,25 @@ export default function DateRangePickerModal({
           </button>
         </div>
 
-        {/* Selection Status Banner */}
-        <div className="bg-[#131314] border border-neutral-800/80 p-3 rounded-2xl flex flex-wrap items-center justify-between gap-2 text-xs">
+        {/* Selection Status Banner with Distinct Start & End Points */}
+        <div className="bg-[#131314] border border-neutral-800/80 p-3.5 rounded-2xl flex flex-wrap items-center justify-between gap-2.5 text-xs">
           <div className="flex items-center gap-2">
-            <span className="text-gray-400 font-medium">Start:</span>
-            <span className="font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2.5 py-1 rounded-full font-mono">
+            <span className="text-emerald-400 font-bold uppercase tracking-wider text-[10px]">Start Point:</span>
+            <span className="font-extrabold text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 rounded-full font-mono shadow-sm">
               {formatNice(startDate) || 'Select Start'}
             </span>
           </div>
 
-          <span className="text-gray-600 hidden sm:inline">→</span>
+          <span className="text-gray-500 font-bold hidden sm:inline">→</span>
 
           <div className="flex items-center gap-2">
-            <span className="text-gray-400 font-medium">End:</span>
-            <span className="font-bold text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-1 rounded-full font-mono">
+            <span className="text-indigo-400 font-bold uppercase tracking-wider text-[10px]">End Point:</span>
+            <span className="font-extrabold text-indigo-300 bg-indigo-500/10 border border-indigo-500/30 px-3 py-1 rounded-full font-mono shadow-sm">
               {formatNice(endDate) || 'Select End'}
             </span>
           </div>
 
-          <div className="bg-[#282a2c] px-3 py-1 rounded-full text-gray-300 font-bold font-mono text-[11px] border border-neutral-700/50">
+          <div className="bg-[#282a2c] px-3.5 py-1.5 rounded-full text-blue-300 font-extrabold font-mono text-[11px] border border-neutral-700/60 shadow-sm">
             {totalDays} Days
           </div>
         </div>
@@ -186,16 +188,16 @@ export default function DateRangePickerModal({
           </div>
 
           {/* Days Grid */}
-          <div className="grid grid-cols-7 gap-1 text-xs">
+          <div className="grid grid-cols-7 gap-1 text-xs pt-1">
             {dayGrid.map((item, index) => {
               if (!item) {
-                return <div key={`empty-${index}`} className="h-9 sm:h-10"></div>;
+                return <div key={`empty-${index}`} className="h-10 sm:h-11"></div>;
               }
 
               const { dayNumber, dateStr } = item;
               const isStart = dateStr === startDate;
               const isEnd = dateStr === endDate;
-              const isSelectedEndpoint = isStart || isEnd;
+              const isSamePoint = isStart && isEnd;
 
               // Check if dateStr is inside range
               let isInRange = false;
@@ -213,6 +215,20 @@ export default function DateRangePickerModal({
                 isHoveredInRange = dateStr >= lower && dateStr <= upper;
               }
 
+              let cellStyle = 'bg-[#1e1f20] hover:bg-[#282a2c] text-gray-200 hover:text-white border border-neutral-800/40 rounded-2xl';
+
+              if (isSamePoint) {
+                cellStyle = 'bg-gradient-to-tr from-emerald-500 via-blue-600 to-indigo-600 text-white font-extrabold shadow-lg shadow-blue-500/30 z-20 ring-2 ring-blue-400 rounded-2xl scale-105';
+              } else if (isStart) {
+                cellStyle = 'bg-gradient-to-tr from-emerald-600 to-emerald-500 text-white font-extrabold shadow-lg shadow-emerald-500/30 z-20 ring-2 ring-emerald-400 rounded-2xl scale-105';
+              } else if (isEnd) {
+                cellStyle = 'bg-gradient-to-tr from-indigo-600 via-purple-600 to-rose-500 text-white font-extrabold shadow-lg shadow-indigo-500/30 z-20 ring-2 ring-indigo-400 rounded-2xl scale-105';
+              } else if (isInRange) {
+                cellStyle = 'bg-blue-600/25 text-blue-100 font-extrabold border-y border-blue-500/40';
+              } else if (isHoveredInRange) {
+                cellStyle = 'bg-indigo-600/20 text-indigo-200 font-semibold border-y border-indigo-500/30';
+              }
+
               return (
                 <button
                   key={dateStr}
@@ -220,17 +236,23 @@ export default function DateRangePickerModal({
                   onClick={() => handleDayClick(dateStr)}
                   onMouseEnter={() => setHoveredDate(dateStr)}
                   onMouseLeave={() => setHoveredDate(null)}
-                  className={`h-9 sm:h-10 rounded-2xl font-bold transition-all flex items-center justify-center relative active:scale-95 ${
-                    isSelectedEndpoint
-                      ? 'bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 text-white shadow-lg shadow-blue-500/30 z-10 scale-105 ring-2 ring-blue-400/80'
-                      : isInRange
-                      ? 'bg-blue-600/20 text-blue-200 border-y border-blue-500/30 font-extrabold'
-                      : isHoveredInRange
-                      ? 'bg-indigo-600/20 text-indigo-200 border-y border-indigo-500/30 font-semibold'
-                      : 'bg-[#1e1f20] hover:bg-[#282a2c] text-gray-200 hover:text-white border border-neutral-800/40'
-                  }`}
+                  className={`h-10 sm:h-11 font-bold transition-all flex flex-col items-center justify-center relative active:scale-95 ${cellStyle}`}
                 >
-                  <span>{dayNumber}</span>
+                  {isSamePoint ? (
+                    <span className="absolute -top-2 bg-blue-500 text-[8px] text-white px-1.5 py-0.2 font-mono uppercase font-black rounded-full shadow-sm tracking-wider">
+                      Start & End
+                    </span>
+                  ) : isStart ? (
+                    <span className="absolute -top-2 bg-emerald-500 text-[8px] text-white px-1.5 py-0.2 font-mono uppercase font-black rounded-full shadow-sm tracking-wider">
+                      Start
+                    </span>
+                  ) : isEnd ? (
+                    <span className="absolute -top-2 bg-indigo-500 text-[8px] text-white px-1.5 py-0.2 font-mono uppercase font-black rounded-full shadow-sm tracking-wider">
+                      End
+                    </span>
+                  ) : null}
+
+                  <span className="text-xs">{dayNumber}</span>
                 </button>
               );
             })}
@@ -250,7 +272,7 @@ export default function DateRangePickerModal({
           <button
             type="button"
             onClick={handleApply}
-            className="flex-1 py-3 rounded-full text-xs font-bold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 active:scale-[0.99]"
+            className="flex-1 py-3 rounded-full text-xs font-bold bg-gradient-to-r from-emerald-600 via-blue-600 to-indigo-600 hover:from-emerald-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 active:scale-[0.99]"
           >
             <Check className="w-4 h-4 text-white" />
             <span>Apply Date Range</span>
