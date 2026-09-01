@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth, DEFAULT_ADMIN, DEFAULT_ADMIN_ALT } from '../context/AuthContext';
+import { useAuth, DEFAULT_ADMIN } from '../context/AuthContext';
 import { 
   Shield, Trash2, Search, Users, UserX, UserCheck, Lock, Unlock, AlertTriangle, CheckCircle2, ArrowLeft, RefreshCw 
 } from 'lucide-react';
@@ -25,8 +25,7 @@ export default function AdminDashboard({ onBackToDashboard }) {
     if (!user) return false;
     return (
       user.role === 'admin' || 
-      user.email === DEFAULT_ADMIN.email || 
-      user.email === DEFAULT_ADMIN_ALT.email
+      user.email === DEFAULT_ADMIN.email
     );
   };
 

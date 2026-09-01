@@ -29,41 +29,39 @@ export const DEFAULT_ADMIN = {
   createdAt: '2026-01-01T00:00:00.000Z'
 };
 
-export const DEFAULT_ADMIN_ALT = {
-  uid: 'usr_admin_gmail',
-  email: 'admin@gmail.com',
-  username: 'admin',
-  displayName: 'System Administrator',
-  password: 'admin123',
-  role: 'admin',
-  isRestricted: false,
-  avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=admin',
-  createdAt: '2026-01-01T00:00:00.000Z'
-};
-
 export function getLocalUserRegistry() {
   try {
     const raw = localStorage.getItem(LOCAL_REGISTRY_KEY);
     let list = raw ? JSON.parse(raw) : [];
     if (!Array.isArray(list)) list = [];
     
-    // Ensure default admin user accounts exist in registry with default password
-    const ensureAdmin = (adminObj) => {
-      const idx = list.findIndex(u => u && u.email?.toLowerCase() === adminObj.email);
-      if (idx >= 0) {
-        list[idx] = { ...list[idx], password: adminObj.password, role: 'admin' };
-      } else {
-        list.unshift(adminObj);
-      }
-    };
+    // Remove duplicate/legacy admin accounts (e.g. admin@gmail.com)
+    list = list.filter(u => u && u.email?.toLowerCase() !== 'admin@gmail.com');
 
-    ensureAdmin(DEFAULT_ADMIN);
-    ensureAdmin(DEFAULT_ADMIN_ALT);
+    // Deduplicate by clean email address
+    const map = new Map();
+    list.forEach(u => {
+      if (u && u.email) {
+        const clean = u.email.trim().toLowerCase();
+        if (!map.has(clean) || u.role === 'admin') {
+          map.set(clean, u);
+        }
+      }
+    });
+    list = Array.from(map.values());
+
+    // Ensure single default admin account exists
+    const adminIdx = list.findIndex(u => u && u.email?.toLowerCase() === DEFAULT_ADMIN.email);
+    if (adminIdx >= 0) {
+      list[adminIdx] = { ...list[adminIdx], ...DEFAULT_ADMIN };
+    } else {
+      list.unshift(DEFAULT_ADMIN);
+    }
 
     localStorage.setItem(LOCAL_REGISTRY_KEY, JSON.stringify(list));
     return list;
   } catch {
-    return [DEFAULT_ADMIN, DEFAULT_ADMIN_ALT];
+    return [DEFAULT_ADMIN];
   }
 }
 
@@ -177,7 +175,7 @@ export function AuthProvider({ children }) {
 
   const [loading, setLoading] = useState(false);
 
-  // Seed default admin accounts in registry on mount
+  // Seed default admin account in registry on mount
   useEffect(() => {
     getLocalUserRegistry();
   }, []);
@@ -250,7 +248,7 @@ export function AuthProvider({ children }) {
       username: cleanUsername,
       displayName: cleanDisplay,
       password: password,
-      role: (cleanEmail === DEFAULT_ADMIN.email || cleanEmail === DEFAULT_ADMIN_ALT.email) ? 'admin' : 'user',
+      role: cleanEmail === DEFAULT_ADMIN.email ? 'admin' : 'user',
       isRestricted: false,
       avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${cleanUsername}`,
       createdAt: new Date().toISOString()
@@ -299,12 +297,11 @@ export function AuthProvider({ children }) {
     }
 
     // Direct Admin Credentials Shortcut (0ms)
-    if ((cleanEmail === DEFAULT_ADMIN.email || cleanEmail === DEFAULT_ADMIN_ALT.email) && password === 'admin123') {
-      const adminObj = cleanEmail === DEFAULT_ADMIN.email ? DEFAULT_ADMIN : DEFAULT_ADMIN_ALT;
-      saveUserToRegistry(adminObj);
-      setCurrentUser(adminObj);
-      setUserProfile(adminObj);
-      return adminObj;
+    if (cleanEmail === DEFAULT_ADMIN.email && password === 'admin123') {
+      saveUserToRegistry(DEFAULT_ADMIN);
+      setCurrentUser(DEFAULT_ADMIN);
+      setUserProfile(DEFAULT_ADMIN);
+      return DEFAULT_ADMIN;
     }
 
     // Step 1: Check local registry (0ms synchronous lookup)
@@ -399,7 +396,7 @@ export function AuthProvider({ children }) {
         username: cleanEmail.split('@')[0],
         displayName: firebaseUser.displayName || cleanEmail.split('@')[0],
         avatarUrl: firebaseUser.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${cleanEmail.split('@')[0]}`,
-        role: (cleanEmail === DEFAULT_ADMIN.email || cleanEmail === DEFAULT_ADMIN_ALT.email) ? 'admin' : 'user',
+        role: cleanEmail === DEFAULT_ADMIN.email ? 'admin' : 'user',
         isRestricted: false,
         createdAt: new Date().toISOString()
       };
@@ -507,7 +504,7 @@ export function AuthProvider({ children }) {
             username: usernameFromEmail,
             displayName: user.displayName || usernameFromEmail,
             avatarUrl: user.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${usernameFromEmail}`,
-            role: (user.email.trim().toLowerCase() === DEFAULT_ADMIN.email || user.email.trim().toLowerCase() === DEFAULT_ADMIN_ALT.email) ? 'admin' : 'user',
+            role: user.email.trim().toLowerCase() === DEFAULT_ADMIN.email ? 'admin' : 'user',
             isRestricted: false,
             createdAt: new Date().toISOString()
           };
