@@ -54,7 +54,7 @@ export default function Sidebar({
     return () => clearInterval(interval);
   }, [userProfile]);
 
-  // Search Users Effect
+  // Search Users Effect (Excludes Admin identity)
   useEffect(() => {
     if (!showSearchModal || !userProfile) {
       setSearchResults([]);
@@ -74,8 +74,15 @@ export default function Sidebar({
 
   const handleSendRequest = async (targetUser) => {
     if (!userProfile) return;
+    const targetEmail = (targetUser.email || '').trim().toLowerCase();
+    if (targetUser.role === 'admin' || targetEmail === 'admin@stella.com') {
+      alert("Friend requests cannot be sent to administrators.");
+      return;
+    }
     setSentRequestsMap(prev => ({ ...prev, [targetUser.uid]: true }));
-    await sendFriendRequest(userProfile, targetUser);
+    await sendFriendRequest(userProfile, targetUser).catch(err => {
+      alert(err.message || "Failed to send request.");
+    });
   };
 
   const handleAcceptRequest = async (req) => {
@@ -104,6 +111,8 @@ export default function Sidebar({
       onDeleteChallenge(id);
     }
   };
+
+  const isQueryAdmin = searchQuery.trim().toLowerCase().includes('admin@stella.com');
 
   const sidebarContent = (
     <div className="flex flex-col h-full bg-[#1e1f20] text-gray-200 font-sans border-r border-neutral-800/40 select-none">
@@ -414,7 +423,7 @@ export default function Sidebar({
               ) : searchQuery ? (
                 <div className="text-center py-4 space-y-3">
                   <p className="text-xs text-gray-400">No registered user found matching "{searchQuery}"</p>
-                  {searchQuery.includes('@') && (
+                  {searchQuery.includes('@') && !isQueryAdmin && (
                     <button
                       type="button"
                       onClick={() => handleSendRequest({ email: searchQuery.trim().toLowerCase(), displayName: searchQuery.trim().toLowerCase() })}

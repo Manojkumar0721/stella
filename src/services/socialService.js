@@ -33,6 +33,7 @@ function getLocalUserRegistry() {
 
 /**
  * Instant Search for registered users by Gmail address, Full Name, or Username
+ * EXCLUDES all administrator accounts to keep admin identity hidden.
  */
 export async function searchUsers(searchTerm = '', currentUid = '', currentEmail = '') {
   const clean = (searchTerm || '').trim().toLowerCase().replace(/^@/, '');
@@ -41,7 +42,7 @@ export async function searchUsers(searchTerm = '', currentUid = '', currentEmail
 
   const userPool = getLocalUserRegistry();
 
-  // Deduplicate users by email or uid, excluding current user
+  // Deduplicate users by email or uid, excluding current user & admin accounts
   const uniqueUsers = [];
   const seenKeys = new Set();
 
@@ -49,6 +50,11 @@ export async function searchUsers(searchTerm = '', currentUid = '', currentEmail
     if (!u) continue;
     const userEmail = (u.email || '').trim().toLowerCase();
     const userUid = (u.uid || '').trim().toLowerCase();
+
+    // REQUIREMENT: Admin identity is strictly hidden; skip any admin user
+    if (u.role === 'admin' || userEmail === 'admin@stella.com') {
+      continue;
+    }
 
     // Skip current user
     if ((cleanCurrentUid && userUid === cleanCurrentUid) || 
@@ -86,7 +92,7 @@ export async function searchUsers(searchTerm = '', currentUid = '', currentEmail
 
   if (!clean) return uniqueUsers;
 
-  // Filter matching users
+  // Filter matching non-admin users
   return uniqueUsers.filter(u => 
     (u.email && u.email.toLowerCase().includes(clean)) ||
     (u.displayName && u.displayName.toLowerCase().includes(clean)) ||
@@ -96,13 +102,19 @@ export async function searchUsers(searchTerm = '', currentUid = '', currentEmail
 
 /**
  * Send Friend Request (Instant 0ms synchronous local save + background cloud sync)
+ * Strictly blocks sending requests to admin accounts.
  */
 export async function sendFriendRequest(senderProfile, targetUser) {
-  const senderEmail = (senderProfile.email || '').trim().toLowerCase();
-  const senderUid = senderProfile.uid || `usr_${senderEmail.replace(/[^a-z0-9]/g, '_')}`;
-
   const receiverEmail = (targetUser.email || '').trim().toLowerCase();
   const receiverUid = targetUser.uid || `usr_${receiverEmail.replace(/[^a-z0-9]/g, '_')}`;
+
+  // REQUIREMENT: Prevent sending requests to admin accounts
+  if (targetUser.role === 'admin' || receiverEmail === 'admin@stella.com') {
+    throw new Error('Friend requests cannot be sent to administrators.');
+  }
+
+  const senderEmail = (senderProfile.email || '').trim().toLowerCase();
+  const senderUid = senderProfile.uid || `usr_${senderEmail.replace(/[^a-z0-9]/g, '_')}`;
 
   const reqId = `freq_${senderUid}_${receiverUid}`;
 
