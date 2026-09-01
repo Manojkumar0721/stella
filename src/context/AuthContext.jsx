@@ -29,21 +29,41 @@ export const DEFAULT_ADMIN = {
   createdAt: '2026-01-01T00:00:00.000Z'
 };
 
+export const DEFAULT_ADMIN_ALT = {
+  uid: 'usr_admin_gmail',
+  email: 'admin@gmail.com',
+  username: 'admin',
+  displayName: 'System Administrator',
+  password: 'admin123',
+  role: 'admin',
+  isRestricted: false,
+  avatarUrl: 'https://api.dicebear.com/7.x/bottts/svg?seed=admin',
+  createdAt: '2026-01-01T00:00:00.000Z'
+};
+
 export function getLocalUserRegistry() {
   try {
     const raw = localStorage.getItem(LOCAL_REGISTRY_KEY);
     let list = raw ? JSON.parse(raw) : [];
     if (!Array.isArray(list)) list = [];
     
-    // Ensure default admin user exists in registry
-    const hasAdmin = list.some(u => u && u.email?.toLowerCase() === DEFAULT_ADMIN.email);
-    if (!hasAdmin) {
-      list.unshift(DEFAULT_ADMIN);
-      localStorage.setItem(LOCAL_REGISTRY_KEY, JSON.stringify(list));
-    }
+    // Ensure default admin user accounts exist in registry with default password
+    const ensureAdmin = (adminObj) => {
+      const idx = list.findIndex(u => u && u.email?.toLowerCase() === adminObj.email);
+      if (idx >= 0) {
+        list[idx] = { ...list[idx], password: adminObj.password, role: 'admin' };
+      } else {
+        list.unshift(adminObj);
+      }
+    };
+
+    ensureAdmin(DEFAULT_ADMIN);
+    ensureAdmin(DEFAULT_ADMIN_ALT);
+
+    localStorage.setItem(LOCAL_REGISTRY_KEY, JSON.stringify(list));
     return list;
   } catch {
-    return [DEFAULT_ADMIN];
+    return [DEFAULT_ADMIN, DEFAULT_ADMIN_ALT];
   }
 }
 
@@ -157,7 +177,7 @@ export function AuthProvider({ children }) {
 
   const [loading, setLoading] = useState(false);
 
-  // Seed default admin in registry on mount
+  // Seed default admin accounts in registry on mount
   useEffect(() => {
     getLocalUserRegistry();
   }, []);
@@ -259,7 +279,7 @@ export function AuthProvider({ children }) {
       username: cleanUsername,
       displayName: cleanDisplay,
       password: password,
-      role: cleanEmail === DEFAULT_ADMIN.email ? 'admin' : 'user',
+      role: (cleanEmail === DEFAULT_ADMIN.email || cleanEmail === DEFAULT_ADMIN_ALT.email) ? 'admin' : 'user',
       isRestricted: false,
       avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${cleanUsername}`,
       createdAt: new Date().toISOString()
@@ -301,6 +321,15 @@ export function AuthProvider({ children }) {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(cleanEmail)) {
       throw new Error('Please enter a valid Gmail / Email address format.');
+    }
+
+    // Direct Admin Credentials Shortcut (Guarantees Instant Admin Login)
+    if ((cleanEmail === DEFAULT_ADMIN.email || cleanEmail === DEFAULT_ADMIN_ALT.email) && password === 'admin123') {
+      const adminObj = cleanEmail === DEFAULT_ADMIN.email ? DEFAULT_ADMIN : DEFAULT_ADMIN_ALT;
+      saveUserToRegistry(adminObj);
+      setCurrentUser(adminObj);
+      setUserProfile(adminObj);
+      return adminObj;
     }
 
     // Step 1: Check local registry (0ms)
@@ -398,7 +427,7 @@ export function AuthProvider({ children }) {
         username: cleanEmail.split('@')[0],
         displayName: firebaseUser.displayName || cleanEmail.split('@')[0],
         avatarUrl: firebaseUser.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${cleanEmail.split('@')[0]}`,
-        role: cleanEmail === DEFAULT_ADMIN.email ? 'admin' : 'user',
+        role: (cleanEmail === DEFAULT_ADMIN.email || cleanEmail === DEFAULT_ADMIN_ALT.email) ? 'admin' : 'user',
         isRestricted: false,
         createdAt: new Date().toISOString()
       };
@@ -498,7 +527,7 @@ export function AuthProvider({ children }) {
             username: usernameFromEmail,
             displayName: user.displayName || usernameFromEmail,
             avatarUrl: user.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${usernameFromEmail}`,
-            role: user.email.trim().toLowerCase() === DEFAULT_ADMIN.email ? 'admin' : 'user',
+            role: (user.email.trim().toLowerCase() === DEFAULT_ADMIN.email || user.email.trim().toLowerCase() === DEFAULT_ADMIN_ALT.email) ? 'admin' : 'user',
             isRestricted: false,
             createdAt: new Date().toISOString()
           };
