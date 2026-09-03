@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import { Calendar as CalendarIcon, Sparkles, Rocket, ArrowRight, Target, AlertCircle, ArrowLeft, CalendarDays } from 'lucide-react';
-import DateRangePickerModal from './DateRangePickerModal';
+import SingleDatePickerPopover from './SingleDatePickerPopover';
 
 export default function ChallengeSetup({ onCreateChallenge, onCancel, hasExistingChallenges }) {
   const [challengeName, setChallengeName] = useState('New Custom Challenge');
   const [startDate, setStartDate] = useState('2026-09-01');
   const [endDate, setEndDate] = useState('2026-11-30');
   const [errorMsg, setErrorMsg] = useState('');
-  const [showDatePicker, setShowDatePicker] = useState(false);
+  
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [showEndPicker, setShowEndPicker] = useState(false);
 
   const calculateDays = () => {
     if (!startDate || !endDate) return 0;
@@ -101,42 +103,105 @@ export default function ChallengeSetup({ onCreateChallenge, onCancel, hasExistin
             />
           </div>
 
-          {/* Interactive Date Range Calendar Trigger Button */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-gray-300 flex items-center justify-between">
+          {/* Simple 2-Column Date Selection (Start Date & End Date) */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs text-gray-300 font-semibold px-0.5">
               <span className="flex items-center gap-1.5">
                 <CalendarIcon className="w-4 h-4 text-blue-400" />
-                <span>Challenge Date Range</span>
+                <span>Challenge Dates</span>
               </span>
-              <span className="text-[11px] text-blue-400 font-medium">Click to change</span>
-            </label>
+              <span className="text-blue-400 font-mono text-[11px]">
+                Duration: <strong className="font-extrabold">{calculateDays()} Days</strong>
+              </span>
+            </div>
 
-            <button
-              type="button"
-              onClick={() => setShowDatePicker(true)}
-              className="w-full bg-[#131314] hover:bg-[#282a2c] border border-neutral-800 hover:border-blue-500/40 rounded-3xl p-4 transition-all text-left flex items-center justify-between group shadow-sm active:scale-[0.99]"
-            >
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-2xl bg-blue-500/10 text-blue-400 border border-blue-500/20 group-hover:bg-blue-600 group-hover:text-white transition-all">
-                  <CalendarDays className="w-5 h-5" />
-                </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              {/* Start Date Column */}
+              <div className="space-y-1.5 relative">
+                <label className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
+                  <span>Start Date</span>
+                </label>
+                
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowStartPicker(!showStartPicker);
+                      setShowEndPicker(false);
+                    }}
+                    className="w-full bg-[#131314] hover:bg-[#282a2c] border border-neutral-800 hover:border-emerald-500/50 rounded-2xl px-4 py-3 text-left transition-all flex items-center justify-between group shadow-sm active:scale-[0.99]"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <CalendarDays className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span className="text-xs font-bold text-gray-100 truncate font-mono">
+                        {formatNiceDate(startDate) || 'Select Start Date'}
+                      </span>
+                    </div>
+                    <span className="text-[10px] bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-mono font-bold shrink-0">
+                      Pick Date
+                    </span>
+                  </button>
 
-                <div className="space-y-0.5">
-                  <p className="text-sm font-bold text-gray-100 flex items-center gap-2">
-                    <span>{formatNiceDate(startDate)}</span>
-                    <span className="text-gray-500 font-normal">to</span>
-                    <span>{formatNiceDate(endDate)}</span>
-                  </p>
-                  <p className="text-xs text-gray-400">
-                    Duration: <span className="text-blue-400 font-semibold">{calculateDays()} Days</span>
-                  </p>
+                  {/* Start Date Popover Calendar */}
+                  {showStartPicker && (
+                    <SingleDatePickerPopover
+                      selectedDate={startDate}
+                      onSelectDate={(newDate) => {
+                        setStartDate(newDate);
+                        if (endDate && endDate < newDate) {
+                          setEndDate(newDate);
+                        }
+                        setErrorMsg('');
+                      }}
+                      onClose={() => setShowStartPicker(false)}
+                      title="Select Start Date"
+                    />
+                  )}
                 </div>
               </div>
 
-              <span className="bg-[#1e1f20] group-hover:bg-blue-600 group-hover:text-white text-gray-300 text-xs px-3.5 py-1.5 rounded-full border border-neutral-700/60 transition-all font-semibold shrink-0">
-                Open Calendar
-              </span>
-            </button>
+              {/* End Date Column */}
+              <div className="space-y-1.5 relative">
+                <label className="text-[11px] font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-1">
+                  <span>End Date</span>
+                </label>
+
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowEndPicker(!showEndPicker);
+                      setShowStartPicker(false);
+                    }}
+                    className="w-full bg-[#131314] hover:bg-[#282a2c] border border-neutral-800 hover:border-indigo-500/50 rounded-2xl px-4 py-3 text-left transition-all flex items-center justify-between group shadow-sm active:scale-[0.99]"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <CalendarDays className="w-4 h-4 text-indigo-400 shrink-0" />
+                      <span className="text-xs font-bold text-gray-100 truncate font-mono">
+                        {formatNiceDate(endDate) || 'Select End Date'}
+                      </span>
+                    </div>
+                    <span className="text-[10px] bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded-full font-mono font-bold shrink-0">
+                      Pick Date
+                    </span>
+                  </button>
+
+                  {/* End Date Popover Calendar */}
+                  {showEndPicker && (
+                    <SingleDatePickerPopover
+                      selectedDate={endDate}
+                      minDate={startDate}
+                      onSelectDate={(newDate) => {
+                        setEndDate(newDate);
+                        setErrorMsg('');
+                      }}
+                      onClose={() => setShowEndPicker(false)}
+                      title="Select End Date"
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Error Banner */}
@@ -169,20 +234,6 @@ export default function ChallengeSetup({ onCreateChallenge, onCancel, hasExistin
           </div>
         </form>
       </div>
-
-      {/* Date Range Picker Calendar Popup Modal */}
-      {showDatePicker && (
-        <DateRangePickerModal
-          initialStartDate={startDate}
-          initialEndDate={endDate}
-          onSave={(newStart, newEnd) => {
-            setStartDate(newStart);
-            setEndDate(newEnd);
-            setErrorMsg('');
-          }}
-          onClose={() => setShowDatePicker(false)}
-        />
-      )}
     </div>
   );
 }
