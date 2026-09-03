@@ -470,17 +470,53 @@ export function AuthProvider({ children }) {
   const deleteUserByAdmin = async (targetUid) => {
     let registry = getLocalUserRegistry();
     const targetUser = registry.find(u => u && u.uid === targetUid);
-    registry = registry.filter(u => u && u.uid !== targetUid);
+    const targetEmail = targetUser?.email ? targetUser.email.trim().toLowerCase() : '';
+    registry = registry.filter(u => u && u.uid !== targetUid && (targetEmail ? u.email?.trim().toLowerCase() !== targetEmail : true));
     localStorage.setItem(LOCAL_REGISTRY_KEY, JSON.stringify(registry));
     
+    // Purge all friendships / connections involving deleted user locally
     try {
-      await deleteDoc(doc(db, 'users', targetUid)).catch(() => {});
-      if (targetUser && targetUser.email) {
-        const customId = makeUserId(targetUser.email);
-        await deleteDoc(doc(db, 'users', customId)).catch(() => {});
+      const friendshipsRaw = localStorage.getItem('stella_local_friendships_v1');
+      const friendships = friendshipsRaw ? JSON.parse(friendshipsRaw) : [];
+      const remainingFriendships = [];
+      const removedFriendshipIds = [];
+
+      for (const r of friendships) {
+        if (!r) continue;
+        const sEmail = (r.senderEmail || '').trim().toLowerCase();
+        const sUid = (r.senderUid || '').trim().toLowerCase();
+        const rEmail = (r.receiverEmail || '').trim().toLowerCase();
+        const rUid = (r.receiverUid || '').trim().toLowerCase();
+
+        const matchesTarget = (targetUid && (sUid === targetUid || rUid === targetUid)) ||
+                              (targetEmail && (sEmail === targetEmail || rEmail === targetEmail));
+
+        if (matchesTarget) {
+          if (r.id) removedFriendshipIds.push(r.id);
+        } else {
+          remainingFriendships.push(r);
+        }
       }
-    } catch (err) {
-      console.warn("Firestore delete sync note:", err);
+
+      localStorage.setItem('stella_local_friendships_v1', JSON.stringify(remainingFriendships));
+
+      // Async Firestore deletion for user docs & friendship docs
+      (async () => {
+        try {
+          await deleteDoc(doc(db, 'users', targetUid)).catch(() => {});
+          if (targetEmail) {
+            const customId = makeUserId(targetEmail);
+            await deleteDoc(doc(db, 'users', customId)).catch(() => {});
+          }
+          for (const fId of removedFriendshipIds) {
+            if (fId) await deleteDoc(doc(db, 'friendships', fId)).catch(() => {});
+          }
+        } catch (err) {
+          console.warn("Firestore delete sync note:", err);
+        }
+      })();
+    } catch (e) {
+      console.warn("Local friendship purge note:", e);
     }
   };
 
