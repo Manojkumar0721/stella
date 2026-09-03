@@ -90,7 +90,7 @@ export async function searchUsers(searchTerm = '', currentUid = '', currentEmail
     }
   })();
 
-  if (!clean) return uniqueUsers;
+  if (!clean) return [];
 
   // Filter matching non-admin users
   return uniqueUsers.filter(u => 

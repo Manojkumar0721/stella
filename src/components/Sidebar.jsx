@@ -54,9 +54,10 @@ export default function Sidebar({
     return () => clearInterval(interval);
   }, [userProfile]);
 
-  // Search Users Effect (Excludes Admin identity)
+  // Search Users Effect (Only searches when query is provided)
   useEffect(() => {
-    if (!showSearchModal || !userProfile) {
+    const term = searchQuery.trim();
+    if (!showSearchModal || !userProfile || !term) {
       setSearchResults([]);
       setIsSearching(false);
       return;
@@ -64,7 +65,7 @@ export default function Sidebar({
 
     setIsSearching(true);
     const timer = setTimeout(async () => {
-      const results = await searchUsers(searchQuery.trim(), userProfile.uid, userProfile.email);
+      const results = await searchUsers(term, userProfile.uid, userProfile.email);
       setSearchResults(results);
       setIsSearching(false);
     }, 30);
@@ -170,7 +171,11 @@ export default function Sidebar({
         </button>
 
         <button
-          onClick={() => setShowSearchModal(true)}
+          onClick={() => {
+            setSearchQuery('');
+            setSearchResults([]);
+            setShowSearchModal(true);
+          }}
           className="w-full py-2.5 px-4 rounded-full font-medium text-xs bg-[#131314] hover:bg-[#282a2c] text-gray-400 hover:text-gray-200 transition-all flex items-center justify-between border border-neutral-800/60"
         >
           <span className="flex items-center gap-2">
@@ -420,7 +425,7 @@ export default function Sidebar({
                     </div>
                   );
                 })
-              ) : searchQuery ? (
+              ) : searchQuery.trim() ? (
                 <div className="text-center py-4 space-y-3">
                   <p className="text-xs text-gray-400">No registered user found matching "{searchQuery}"</p>
                   {searchQuery.includes('@') && !isQueryAdmin && (
@@ -435,7 +440,10 @@ export default function Sidebar({
                   )}
                 </div>
               ) : (
-                <p className="text-xs text-gray-500 text-center py-4">Start typing a Gmail address or Name above to search in real time.</p>
+                <div className="text-center py-6 text-gray-500 space-y-1">
+                  <Search className="w-5 h-5 text-gray-600 mx-auto opacity-40" />
+                  <p className="text-xs">Type a Gmail address or Name above to search for users.</p>
+                </div>
               )}
             </div>
           </div>
