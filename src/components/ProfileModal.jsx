@@ -63,7 +63,7 @@ export default function ProfileModal({ onClose }) {
     const canvas = canvasRef.current || document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     
-    const size = 320; // 320x320 high resolution output
+    const size = 250; // Optimized 250x250 resolution for ultra-fast performance
     canvas.width = size;
     canvas.height = size;
     
@@ -95,7 +95,7 @@ export default function ProfileModal({ onClose }) {
     ctx.restore();
     
     try {
-      const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.9);
+      const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.82);
       setPreviewUrl(croppedDataUrl);
     } catch (err) {
       console.error("Canvas export error:", err);
@@ -196,51 +196,53 @@ export default function ProfileModal({ onClose }) {
     setIsDragging(false);
   };
 
-  // Upload Cropped Avatar to Cloud Storage & Update Database & Auth Context
-  const handleSaveAvatar = async () => {
+  // Instant 0ms Latency Avatar Save (Instant local update + non-blocking background cloud sync)
+  const handleSaveAvatar = () => {
     if (!previewUrl || !userProfile?.uid) {
       alert('Unable to save profile picture. User session not active.');
       return;
     }
-    setIsUploading(true);
 
-    try {
-      let downloadURL = previewUrl;
+    const currentPreview = previewUrl;
 
-      // Attempt Cloud Storage Upload
+    // 1. INSTANT 0ms Update local AuthContext & LocalStorage session & registry!
+    if (updateProfileAvatar) {
+      updateProfileAvatar(currentPreview);
+    }
+
+    setUploadSuccess(true);
+
+    setTimeout(() => {
+      setSelectedImage(null);
+      setUploadSuccess(false);
+    }, 500);
+
+    // 2. Non-blocking background sync to Firebase Storage & Firestore
+    (async () => {
       try {
-        const avatarRef = ref(storage, `avatars/${userProfile.uid}_${Date.now()}.jpg`);
-        await uploadString(avatarRef, previewUrl, 'data_url');
-        downloadURL = await getDownloadURL(avatarRef);
-      } catch (storageErr) {
-        console.warn("Cloud Storage upload notice, using optimized base64 URL fallback:", storageErr);
-      }
+        let downloadURL = currentPreview;
 
-      // Update Firestore user document with merge: true
-      try {
+        try {
+          const avatarRef = ref(storage, `avatars/${userProfile.uid}_${Date.now()}.jpg`);
+          await uploadString(avatarRef, currentPreview, 'data_url');
+          downloadURL = await getDownloadURL(avatarRef);
+        } catch (storageErr) {
+          console.warn("Cloud Storage upload notice, using optimized base64 URL fallback:", storageErr);
+        }
+
+        // Sync to Firestore user document
         await setDoc(doc(db, 'users', userProfile.uid), {
           avatarUrl: downloadURL
-        }, { merge: true });
-      } catch (dbErr) {
-        console.warn("Firestore profile update fallback:", dbErr);
-      }
+        }, { merge: true }).catch(() => {});
 
-      // Update local state in AuthContext & LocalStorage
-      if (updateProfileAvatar) {
-        updateProfileAvatar(downloadURL);
+        // Update with remote cloud URL if storage upload succeeded
+        if (downloadURL !== currentPreview && updateProfileAvatar) {
+          updateProfileAvatar(downloadURL);
+        }
+      } catch (err) {
+        console.warn("Background avatar sync note:", err);
       }
-
-      setUploadSuccess(true);
-      setTimeout(() => {
-        setSelectedImage(null);
-        setUploadSuccess(false);
-      }, 1500);
-    } catch (err) {
-      console.error("Save avatar error:", err);
-      alert('Failed to save profile picture. Please try again.');
-    } finally {
-      setIsUploading(false);
-    }
+    })();
   };
 
   return (
