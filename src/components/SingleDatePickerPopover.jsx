@@ -12,7 +12,8 @@ export default function SingleDatePickerPopover({
   onSelectDate,
   onClose,
   title = "Select Date",
-  minDate = null
+  minDate = null,
+  accentColor = "blue"
 }) {
   const initialObj = selectedDate ? new Date(selectedDate) : new Date();
   const [viewYear, setViewYear] = useState(initialObj.getFullYear() || 2026);
@@ -38,12 +39,24 @@ export default function SingleDatePickerPopover({
 
   const dayGrid = getMonthGridDays(viewYear, viewMonth);
 
+  // Dynamic styling based on accentColor
+  const isEmerald = accentColor === 'emerald';
+  const isIndigo = accentColor === 'indigo';
+
+  const iconColor = isEmerald ? 'text-emerald-400' : isIndigo ? 'text-indigo-400' : 'text-blue-400';
+  const yearColor = isEmerald ? 'text-emerald-400' : isIndigo ? 'text-indigo-400' : 'text-blue-400';
+  const selectedStyle = isEmerald
+    ? 'bg-emerald-600 text-white font-extrabold shadow-md shadow-emerald-500/30 ring-1 ring-emerald-400 scale-105'
+    : isIndigo
+    ? 'bg-indigo-600 text-white font-extrabold shadow-md shadow-indigo-500/30 ring-1 ring-indigo-400 scale-105'
+    : 'bg-blue-600 text-white font-extrabold shadow-md shadow-blue-500/30 ring-1 ring-blue-400 scale-105';
+
   return (
     <div className="mt-2.5 w-full bg-[#131314] border border-neutral-800 rounded-2xl p-3 sm:p-4 shadow-inner space-y-3 animate-fade-in font-sans">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-neutral-800/80 pb-2">
         <div className="flex items-center gap-1.5 text-xs font-bold text-gray-200">
-          <CalendarIcon className="w-3.5 h-3.5 text-blue-400" />
+          <CalendarIcon className={`w-3.5 h-3.5 ${iconColor}`} />
           <span>{title}</span>
         </div>
         <button
@@ -67,7 +80,7 @@ export default function SingleDatePickerPopover({
 
         <div className="text-xs font-extrabold text-white tracking-wide">
           <span>{MONTH_NAMES[viewMonth]} </span>
-          <span className="text-blue-400 font-mono">{viewYear}</span>
+          <span className={`font-mono ${yearColor}`}>{viewYear}</span>
         </div>
 
         <button
@@ -108,7 +121,7 @@ export default function SingleDatePickerPopover({
               }}
               className={`h-7 sm:h-8 font-bold rounded-xl transition-all flex items-center justify-center text-xs ${
                 isSelected
-                  ? 'bg-blue-600 text-white font-extrabold shadow-md shadow-blue-500/30 ring-1 ring-blue-400 scale-105'
+                  ? selectedStyle
                   : isDisabled
                   ? 'text-gray-600 opacity-40 cursor-not-allowed'
                   : 'bg-[#1e1f20] hover:bg-[#282a2c] text-gray-200 hover:text-white border border-neutral-800/40'
