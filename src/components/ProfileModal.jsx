@@ -4,14 +4,14 @@ import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { doc, setDoc } from 'firebase/firestore';
 import { db, storage } from '../firebase';
 import { 
-  fetchPendingRequests, acceptFriendRequest, declineFriendRequest 
+  fetchPendingRequests, acceptFriendRequest, declineFriendRequest, fetchFriends
 } from '../services/socialService';
 import { 
   X, Camera, Check, Upload, User, Mail, Sparkles, LogOut, Loader2, Bell, UserCheck, UserX, CheckCircle2,
-  ZoomIn, ZoomOut, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Move, RotateCcw
+  ZoomIn, ZoomOut, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Move, RotateCcw, Users
 } from 'lucide-react';
 
-export default function ProfileModal({ onClose }) {
+export default function ProfileModal({ onClose, onSelectFriend, activeFriendUser }) {
   const { userProfile, updateProfileAvatar, logout } = useAuth();
   
   const [selectedImage, setSelectedImage] = useState(null);
@@ -28,33 +28,41 @@ export default function ProfileModal({ onClose }) {
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   
   const [pendingRequests, setPendingRequests] = useState([]);
+  const [friendsList, setFriendsList] = useState([]);
   const [isLoadingRequests, setIsLoadingRequests] = useState(false);
+  const [isLoadingFriends, setIsLoadingFriends] = useState(false);
 
   const fileInputRef = useRef(null);
   const canvasRef = useRef(null);
   const imageRef = useRef(null);
 
-  // Load Pending Friend Requests
-  const loadRequests = async () => {
+  // Load Social Data (Pending Friend Requests & Active Connections)
+  const loadSocialData = async () => {
     if (!userProfile) return;
     setIsLoadingRequests(true);
-    const reqs = await fetchPendingRequests(userProfile.uid, userProfile.email);
+    setIsLoadingFriends(true);
+    const [reqs, friends] = await Promise.all([
+      fetchPendingRequests(userProfile.uid, userProfile.email),
+      fetchFriends(userProfile.uid, userProfile.email)
+    ]);
     setPendingRequests(reqs);
+    setFriendsList(friends);
     setIsLoadingRequests(false);
+    setIsLoadingFriends(false);
   };
 
   useEffect(() => {
-    loadRequests();
+    loadSocialData();
   }, [userProfile]);
 
   const handleAccept = async (req) => {
     await acceptFriendRequest(req.id, req);
-    loadRequests();
+    loadSocialData();
   };
 
   const handleDecline = async (reqId) => {
     await declineFriendRequest(reqId);
-    loadRequests();
+    loadSocialData();
   };
 
   // Perform HTML5 Canvas Circular Crop with Zoom & Position offset
@@ -257,7 +265,7 @@ export default function ProfileModal({ onClose }) {
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-blue-400" />
             <h2 className="text-sm font-bold text-gray-100">
-              {selectedImage ? "Customize Profile Picture" : "Profile & Requests"}
+              {selectedImage ? "Customize Profile Picture" : "Profile & Connections"}
             </h2>
           </div>
           <button
@@ -462,7 +470,7 @@ export default function ProfileModal({ onClose }) {
             </div>
           </div>
         ) : (
-          /* Main Profile Menu View */
+          /* Main Profile & Connections View */
           <div className="space-y-6 text-center">
             {/* Avatar with Camera Overlay */}
             <div className="relative w-24 h-24 mx-auto group cursor-pointer" onClick={triggerFileInput}>
@@ -492,6 +500,72 @@ export default function ProfileModal({ onClose }) {
                 <Mail className="w-3.5 h-3.5 text-gray-500" />
                 <span>{userProfile?.email}</span>
               </p>
+            </div>
+
+            {/* Dedicated Connections / Friends Section */}
+            <div className="bg-[#131314] border border-neutral-800/80 rounded-2xl p-4 text-left space-y-3 shadow-inner">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-emerald-400" />
+                  <h4 className="text-xs font-bold text-gray-200 uppercase tracking-wider">
+                    My Connections ({friendsList.length})
+                  </h4>
+                </div>
+              </div>
+
+              {isLoadingFriends ? (
+                <p className="text-xs text-gray-400 text-center py-2">Loading connections...</p>
+              ) : friendsList.length > 0 ? (
+                <div className="space-y-2 max-h-44 overflow-y-auto custom-scrollbar pr-1">
+                  {friendsList.map(friend => {
+                    const isSelected = activeFriendUser?.uid === friend.uid;
+                    return (
+                      <div
+                        key={friend.uid}
+                        className={`p-2.5 rounded-xl border flex items-center justify-between gap-3 transition-all ${
+                          isSelected
+                            ? 'bg-blue-600/20 border-blue-500/50 text-white font-medium'
+                            : 'bg-[#1e1f20] border-neutral-800 text-gray-200 shadow-sm'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                          <img
+                            src={friend.avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${friend.email}`}
+                            alt={friend.displayName || friend.email}
+                            className="w-7 h-7 rounded-full bg-[#131314] shrink-0 border border-neutral-700/40 p-0.5"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-bold text-gray-100 truncate">
+                              {friend.displayName || friend.email}
+                            </p>
+                            <p className="text-[10px] text-gray-400 truncate">
+                              {friend.email}
+                            </p>
+                          </div>
+                        </div>
+
+                        {onSelectFriend && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onSelectFriend(friend);
+                              onClose();
+                            }}
+                            className="px-3 py-1 rounded-full text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-md transition-all shrink-0 active:scale-95"
+                          >
+                            View Profile
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-3 text-gray-500 space-y-1">
+                  <Users className="w-5 h-5 text-gray-600 mx-auto opacity-50" />
+                  <p className="text-xs">No active connections yet</p>
+                </div>
+              )}
             </div>
 
             {/* Dedicated Pending Friend Requests Section */}

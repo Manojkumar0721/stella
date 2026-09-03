@@ -219,48 +219,6 @@ export default function Sidebar({
           </div>
         )}
 
-        {/* Connections / Friends Section */}
-        {friendsList.length > 0 && (
-          <div className="space-y-1">
-            <div className="px-3 py-1 text-[11px] font-semibold text-gray-400 tracking-wider flex items-center gap-1.5">
-              <Users className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Connections ({friendsList.length})</span>
-            </div>
-            {friendsList.map(friend => {
-              const isSelected = activeFriendUser?.uid === friend.uid;
-              return (
-                <div
-                  key={friend.uid}
-                  onClick={() => { onSelectFriend(friend); if (onCloseMobile) onCloseMobile(); }}
-                  className={`px-3 py-2 rounded-2xl cursor-pointer transition-all flex items-center justify-between text-xs ${
-                    isSelected
-                      ? 'bg-blue-600/20 border border-blue-500/50 text-white font-medium'
-                      : 'text-gray-300 hover:bg-[#282a2c]'
-                  }`}
-                  title={`${friend.displayName || friend.email} (${friend.email})`}
-                >
-                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                    <img
-                      src={friend.avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${friend.email}`}
-                      alt={friend.displayName || friend.email}
-                      className="w-7 h-7 rounded-full bg-[#131314] shrink-0 border border-neutral-700/40 p-0.5"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-bold text-gray-100 truncate leading-tight">
-                        {friend.displayName || friend.email}
-                      </p>
-                      <p className="text-[10px] text-gray-400 truncate leading-tight">
-                        {friend.email}
-                      </p>
-                    </div>
-                  </div>
-                  <span className="text-[10px] text-blue-400 font-medium bg-[#131314] px-2 py-0.5 rounded-full border border-neutral-800 shrink-0">View</span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
         {/* My Challenges Section */}
         <div className="space-y-1">
           <div className="px-3 py-1 text-[11px] font-semibold text-gray-400 tracking-wider">
@@ -352,7 +310,11 @@ export default function Sidebar({
 
       {/* Gemini Floating Profile Modal */}
       {showProfileModal && (
-        <ProfileModal onClose={() => setShowProfileModal(false)} />
+        <ProfileModal 
+          onClose={() => setShowProfileModal(false)} 
+          onSelectFriend={onSelectFriend}
+          activeFriendUser={activeFriendUser}
+        />
       )}
 
       {/* User Search Modal */}
