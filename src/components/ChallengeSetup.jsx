@@ -1,15 +1,11 @@
 import React, { useState } from 'react';
-import { Calendar as CalendarIcon, Sparkles, Rocket, ArrowRight, Target, AlertCircle, ArrowLeft, CalendarDays, ChevronDown } from 'lucide-react';
-import SingleDatePickerPopover from './SingleDatePickerPopover';
+import { Calendar as CalendarIcon, Sparkles, Rocket, ArrowRight, Target, AlertCircle, ArrowLeft, CalendarDays } from 'lucide-react';
 
 export default function ChallengeSetup({ onCreateChallenge, onCancel, hasExistingChallenges }) {
   const [challengeName, setChallengeName] = useState('New Custom Challenge');
   const [startDate, setStartDate] = useState('2026-09-01');
   const [endDate, setEndDate] = useState('2026-11-30');
   const [errorMsg, setErrorMsg] = useState('');
-  
-  const [showStartPicker, setShowStartPicker] = useState(false);
-  const [showEndPicker, setShowEndPicker] = useState(false);
 
   const calculateDays = () => {
     if (!startDate || !endDate) return 0;
@@ -17,13 +13,6 @@ export default function ChallengeSetup({ onCreateChallenge, onCancel, hasExistin
     const d2 = new Date(endDate);
     const diff = Math.abs(d2 - d1);
     return Math.ceil(diff / (1000 * 60 * 60 * 24)) + 1;
-  };
-
-  const formatNiceDate = (dateStr) => {
-    if (!dateStr) return '';
-    const [y, m, d] = dateStr.split('-').map(Number);
-    const dt = new Date(y, m - 1, d);
-    return dt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   };
 
   const handleSubmit = (e) => {
@@ -103,7 +92,7 @@ export default function ChallengeSetup({ onCreateChallenge, onCancel, hasExistin
             />
           </div>
 
-          {/* Simple 2-Column Date Selection (Start Date & End Date) */}
+          {/* Simple & Minimal 2-Column Date Input Selection */}
           <div className="space-y-2.5">
             <div className="flex items-center justify-between text-xs text-gray-300 font-semibold px-0.5">
               <span className="flex items-center gap-1.5">
@@ -117,110 +106,50 @@ export default function ChallengeSetup({ onCreateChallenge, onCancel, hasExistin
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Start Date Column */}
-              <div className="space-y-2">
-                <label className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <CalendarDays className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Start Date</span>
-                  </span>
-                  <span className="text-[10px] text-gray-400 font-mono font-normal">Click icon to open</span>
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <CalendarDays className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Start Date</span>
                 </label>
                 
-                <div className="bg-[#131314] border border-neutral-800/90 rounded-2xl p-3 space-y-2 shadow-sm">
-                  {/* Clickable Date Card with Calendar Icon */}
-                  <div 
-                    onClick={() => {
-                      setShowStartPicker(!showStartPicker);
-                      setShowEndPicker(false);
-                    }}
-                    className={`flex items-center justify-between gap-2.5 bg-[#1e1f20] hover:bg-[#282a2c] border p-2.5 rounded-xl transition-all cursor-pointer group active:scale-[0.99] ${
-                      showStartPicker ? 'border-emerald-500/60 ring-1 ring-emerald-500/30' : 'border-neutral-700/60 hover:border-emerald-500/40'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 group-hover:bg-emerald-600 group-hover:text-white transition-all shrink-0">
-                        <CalendarDays className="w-4 h-4" />
-                      </div>
-                      <span className="text-xs font-bold text-gray-100 font-mono truncate">
-                        {formatNiceDate(startDate) || 'Select Start Date'}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-1 text-[11px] text-emerald-400 font-medium">
-                      <span className="hidden sm:inline text-[10px] text-gray-400">Select</span>
-                      <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showStartPicker ? 'rotate-180 text-emerald-400' : 'text-gray-400'}`} />
-                    </div>
-                  </div>
-
-                  {/* Inline Start Date Calendar */}
-                  {showStartPicker && (
-                    <SingleDatePickerPopover
-                      selectedDate={startDate}
-                      onSelectDate={(newDate) => {
-                        setStartDate(newDate);
-                        if (endDate && endDate < newDate) {
-                          setEndDate(newDate);
+                <div className="relative flex items-center bg-[#131314] border border-neutral-800 hover:border-emerald-500/50 rounded-2xl p-3 transition-all focus-within:ring-1 focus-within:ring-emerald-500/50 shadow-sm">
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        setStartDate(e.target.value);
+                        if (endDate && endDate < e.target.value) {
+                          setEndDate(e.target.value);
                         }
                         setErrorMsg('');
-                      }}
-                      onClose={() => setShowStartPicker(false)}
-                      title="Select Start Date"
-                      accentColor="emerald"
-                    />
-                  )}
+                      }
+                    }}
+                    className="w-full bg-transparent text-xs font-bold text-gray-100 font-mono focus:outline-none cursor-pointer color-scheme-dark"
+                  />
                 </div>
               </div>
 
               {/* End Date Column */}
-              <div className="space-y-2">
-                <label className="text-[11px] font-bold text-indigo-400 uppercase tracking-wider flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <CalendarDays className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>End Date</span>
-                  </span>
-                  <span className="text-[10px] text-gray-400 font-mono font-normal">Click icon to open</span>
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <CalendarDays className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>End Date</span>
                 </label>
 
-                <div className="bg-[#131314] border border-neutral-800/90 rounded-2xl p-3 space-y-2 shadow-sm">
-                  {/* Clickable Date Card with Calendar Icon */}
-                  <div 
-                    onClick={() => {
-                      setShowEndPicker(!showEndPicker);
-                      setShowStartPicker(false);
-                    }}
-                    className={`flex items-center justify-between gap-2.5 bg-[#1e1f20] hover:bg-[#282a2c] border p-2.5 rounded-xl transition-all cursor-pointer group active:scale-[0.99] ${
-                      showEndPicker ? 'border-indigo-500/60 ring-1 ring-indigo-500/30' : 'border-neutral-700/60 hover:border-indigo-500/40'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 group-hover:bg-indigo-600 group-hover:text-white transition-all shrink-0">
-                        <CalendarDays className="w-4 h-4" />
-                      </div>
-                      <span className="text-xs font-bold text-gray-100 font-mono truncate">
-                        {formatNiceDate(endDate) || 'Select End Date'}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-1 text-[11px] text-indigo-400 font-medium">
-                      <span className="hidden sm:inline text-[10px] text-gray-400">Select</span>
-                      <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showEndPicker ? 'rotate-180 text-indigo-400' : 'text-gray-400'}`} />
-                    </div>
-                  </div>
-
-                  {/* Inline End Date Calendar */}
-                  {showEndPicker && (
-                    <SingleDatePickerPopover
-                      selectedDate={endDate}
-                      minDate={startDate}
-                      onSelectDate={(newDate) => {
-                        setEndDate(newDate);
+                <div className="relative flex items-center bg-[#131314] border border-neutral-800 hover:border-indigo-500/50 rounded-2xl p-3 transition-all focus-within:ring-1 focus-within:ring-indigo-500/50 shadow-sm">
+                  <input
+                    type="date"
+                    value={endDate}
+                    min={startDate}
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        setEndDate(e.target.value);
                         setErrorMsg('');
-                      }}
-                      onClose={() => setShowEndPicker(false)}
-                      title="Select End Date"
-                      accentColor="indigo"
-                    />
-                  )}
+                      }
+                    }}
+                    className="w-full bg-transparent text-xs font-bold text-gray-100 font-mono focus:outline-none cursor-pointer color-scheme-dark"
+                  />
                 </div>
               </div>
             </div>
