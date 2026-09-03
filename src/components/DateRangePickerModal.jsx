@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, X, Check } from 'lucide-react';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, X, Check, MapPin, RotateCcw } from 'lucide-react';
 import { getMonthGridDays, WEEKDAYS } from '../utils/dateUtils';
 
 const MONTH_NAMES = [
@@ -13,10 +13,13 @@ export default function DateRangePickerModal({
   onSave,
   onClose
 }) {
+  // Step state: 'start' (Select & Pin Start Point) | 'end' (Select & Pin End Point)
+  const [selectionStep, setSelectionStep] = useState('start');
+
   const [startDate, setStartDate] = useState(initialStartDate || '2026-09-01');
   const [endDate, setEndDate] = useState(initialEndDate || '2026-11-30');
+  const [isStartPinned, setIsStartPinned] = useState(false);
   const [hoveredDate, setHoveredDate] = useState(null);
-  const [selectionStep, setSelectionStep] = useState('start'); // 'start' | 'end'
 
   // Current view month & year (default to start date or today)
   const initialDateObj = startDate ? new Date(startDate) : new Date();
@@ -42,24 +45,42 @@ export default function DateRangePickerModal({
     }
   };
 
-  // Day Cell Selection Logic
+  // Day Cell Click Handler
   const handleDayClick = (dateStr) => {
     if (!dateStr) return;
 
-    if (selectionStep === 'start') {
+    if (selectionStep === 'start' || !isStartPinned) {
       setStartDate(dateStr);
-      setEndDate(dateStr); // reset end date initially
-      setSelectionStep('end');
+      // Auto adjust end date if current endDate is before new startDate
+      if (endDate && endDate < dateStr) {
+        setEndDate(dateStr);
+      }
     } else {
-      // Step === 'end'
+      // Pin End Point step (isStartPinned === true)
       if (dateStr < startDate) {
+        // If clicked date is before start date, treat as new start date
         setStartDate(dateStr);
-        setEndDate(startDate);
+        setEndDate(dateStr);
       } else {
         setEndDate(dateStr);
       }
-      setSelectionStep('start');
     }
+  };
+
+  // Pin Start Point Action
+  const handlePinStart = () => {
+    if (!startDate) return;
+    setIsStartPinned(true);
+    if (!endDate || endDate < startDate) {
+      setEndDate(startDate);
+    }
+    setSelectionStep('end');
+  };
+
+  // Re-pin / Change Start Point Action
+  const handleRepinStart = () => {
+    setIsStartPinned(false);
+    setSelectionStep('start');
   };
 
   // Calculate Duration
@@ -112,9 +133,15 @@ export default function DateRangePickerModal({
             </div>
             <div>
               <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">Select Challenge Date Range</h2>
-              <p className="text-xs text-gray-400">
-                {selectionStep === 'start' ? 'Click a date to select the START POINT' : 'Click a date to select the END POINT'}
-              </p>
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full font-mono uppercase tracking-wider ${
+                  selectionStep === 'start' && !isStartPinned
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                    : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40'
+                }`}>
+                  {selectionStep === 'start' && !isStartPinned ? 'Step 1 of 2: Pin Start Point' : 'Step 2 of 2: Pin End Point'}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -126,27 +153,102 @@ export default function DateRangePickerModal({
           </button>
         </div>
 
-        {/* Selection Status Banner with Distinct Start & End Points */}
-        <div className="bg-[#131314] border border-neutral-800/80 p-3.5 rounded-2xl flex flex-wrap items-center justify-between gap-2.5 text-xs">
+        {/* Step Indicator Progress Bar */}
+        <div className="grid grid-cols-2 gap-2 text-xs font-semibold">
+          <button
+            type="button"
+            onClick={handleRepinStart}
+            className={`p-2.5 rounded-2xl border transition-all flex items-center justify-center gap-2 ${
+              selectionStep === 'start' && !isStartPinned
+                ? 'bg-emerald-500/15 border-emerald-500/60 text-emerald-300 shadow-md'
+                : 'bg-[#131314] border-neutral-800/80 text-gray-400 hover:text-gray-200'
+            }`}
+          >
+            <MapPin className={`w-3.5 h-3.5 ${isStartPinned ? 'text-emerald-400' : 'text-gray-400'}`} />
+            <span>1. {isStartPinned ? 'Start Pinned 📌' : 'Pin Start Point'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (isStartPinned) setSelectionStep('end');
+            }}
+            disabled={!isStartPinned}
+            className={`p-2.5 rounded-2xl border transition-all flex items-center justify-center gap-2 ${
+              selectionStep === 'end' && isStartPinned
+                ? 'bg-indigo-500/15 border-indigo-500/60 text-indigo-300 shadow-md'
+                : 'bg-[#131314] border-neutral-800/80 text-gray-500 cursor-not-allowed opacity-60'
+            }`}
+          >
+            <MapPin className={`w-3.5 h-3.5 ${selectionStep === 'end' ? 'text-indigo-400' : 'text-gray-500'}`} />
+            <span>2. Pin End Point</span>
+          </button>
+        </div>
+
+        {/* Selection Status Banner */}
+        <div className="bg-[#131314] border border-neutral-800/80 p-3.5 rounded-2xl flex flex-wrap items-center justify-between gap-2 text-xs">
           <div className="flex items-center gap-2">
-            <span className="text-emerald-400 font-bold uppercase tracking-wider text-[10px]">Start Point:</span>
-            <span className="font-extrabold text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 rounded-full font-mono shadow-sm">
-              {formatNice(startDate) || 'Select Start'}
+            <span className="text-emerald-400 font-bold uppercase tracking-wider text-[10px] flex items-center gap-1">
+              <MapPin className="w-3 h-3 text-emerald-400" />
+              <span>Start:</span>
+            </span>
+            <span className="font-extrabold text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1 rounded-full font-mono shadow-sm flex items-center gap-1">
+              <span>{formatNice(startDate) || 'Select Start'}</span>
+              {isStartPinned && <span className="text-[10px]">📌</span>}
             </span>
           </div>
 
           <span className="text-gray-500 font-bold hidden sm:inline">→</span>
 
           <div className="flex items-center gap-2">
-            <span className="text-indigo-400 font-bold uppercase tracking-wider text-[10px]">End Point:</span>
+            <span className="text-indigo-400 font-bold uppercase tracking-wider text-[10px] flex items-center gap-1">
+              <MapPin className="w-3 h-3 text-indigo-400" />
+              <span>End:</span>
+            </span>
             <span className="font-extrabold text-indigo-300 bg-indigo-500/10 border border-indigo-500/30 px-3 py-1 rounded-full font-mono shadow-sm">
               {formatNice(endDate) || 'Select End'}
             </span>
           </div>
 
-          <div className="bg-[#282a2c] px-3.5 py-1.5 rounded-full text-blue-300 font-extrabold font-mono text-[11px] border border-neutral-700/60 shadow-sm">
+          <div className="bg-[#282a2c] px-3 py-1.5 rounded-full text-blue-300 font-extrabold font-mono text-[11px] border border-neutral-700/60 shadow-sm shrink-0">
             {totalDays} Days
           </div>
+        </div>
+
+        {/* Dynamic Instruction Banner */}
+        <div className={`p-3 rounded-2xl border text-xs flex items-center justify-between gap-2 ${
+          selectionStep === 'start' && !isStartPinned
+            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
+            : 'bg-indigo-500/10 border-indigo-500/30 text-indigo-200'
+        }`}>
+          <div className="flex items-center gap-2 min-w-0">
+            <MapPin className="w-4 h-4 shrink-0" />
+            <p className="font-medium truncate">
+              {selectionStep === 'start' && !isStartPinned
+                ? 'Click any date to select Start Point, then click "Pin Start Point".'
+                : 'Start Point is pinned! Click a date on or after the Start Point for End Point.'}
+            </p>
+          </div>
+
+          {selectionStep === 'start' && !isStartPinned ? (
+            <button
+              type="button"
+              onClick={handlePinStart}
+              className="px-3.5 py-1.5 rounded-full text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md transition-all shrink-0 active:scale-95 flex items-center gap-1"
+            >
+              <Check className="w-3.5 h-3.5" />
+              <span>Pin Start Point 📌</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleRepinStart}
+              className="px-3 py-1 rounded-full text-xs font-medium bg-[#1e1f20] hover:bg-[#282a2c] text-amber-300 border border-neutral-700 transition-all shrink-0 flex items-center gap-1"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>Change Start</span>
+            </button>
+          )}
         </div>
 
         {/* Calendar Grid Container */}
@@ -244,11 +346,11 @@ export default function DateRangePickerModal({
                     </span>
                   ) : isStart ? (
                     <span className="absolute -top-2 bg-emerald-500 text-[8px] text-white px-1.5 py-0.2 font-mono uppercase font-black rounded-full shadow-sm tracking-wider">
-                      Start
+                      📌 Start
                     </span>
                   ) : isEnd ? (
                     <span className="absolute -top-2 bg-indigo-500 text-[8px] text-white px-1.5 py-0.2 font-mono uppercase font-black rounded-full shadow-sm tracking-wider">
-                      End
+                      📌 End
                     </span>
                   ) : null}
 
@@ -269,14 +371,25 @@ export default function DateRangePickerModal({
             Cancel
           </button>
 
-          <button
-            type="button"
-            onClick={handleApply}
-            className="flex-1 py-3 rounded-full text-xs font-bold bg-gradient-to-r from-emerald-600 via-blue-600 to-indigo-600 hover:from-emerald-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 active:scale-[0.99]"
-          >
-            <Check className="w-4 h-4 text-white" />
-            <span>Apply Date Range</span>
-          </button>
+          {!isStartPinned ? (
+            <button
+              type="button"
+              onClick={handlePinStart}
+              className="flex-1 py-3 rounded-full text-xs font-bold bg-gradient-to-r from-emerald-600 via-blue-600 to-indigo-600 hover:from-emerald-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 active:scale-[0.99]"
+            >
+              <MapPin className="w-4 h-4 text-white" />
+              <span>Pin Start Point 📌</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleApply}
+              className="flex-1 py-3 rounded-full text-xs font-bold bg-gradient-to-r from-emerald-600 via-blue-600 to-indigo-600 hover:from-emerald-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 active:scale-[0.99]"
+            >
+              <Check className="w-4 h-4 text-white" />
+              <span>Pin End Point & Apply Range 📌</span>
+            </button>
+          )}
         </div>
       </div>
     </div>
