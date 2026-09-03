@@ -4,11 +4,11 @@ import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { doc, setDoc } from 'firebase/firestore';
 import { db, storage } from '../firebase';
 import { 
-  fetchPendingRequests, acceptFriendRequest, declineFriendRequest, fetchFriends
+  fetchPendingRequests, acceptFriendRequest, declineFriendRequest, fetchFriends, unfollowUser
 } from '../services/socialService';
 import { 
   X, Camera, Check, Upload, User, Mail, Sparkles, LogOut, Loader2, Bell, UserCheck, UserX, CheckCircle2,
-  ZoomIn, ZoomOut, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Move, RotateCcw, Users
+  ZoomIn, ZoomOut, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Move, RotateCcw, Users, UserMinus
 } from 'lucide-react';
 
 export default function ProfileModal({ onClose, onSelectFriend, activeFriendUser }) {
@@ -36,7 +36,7 @@ export default function ProfileModal({ onClose, onSelectFriend, activeFriendUser
   const canvasRef = useRef(null);
   const imageRef = useRef(null);
 
-  // Load Social Data (Pending Friend Requests & Active Connections)
+  // Load Social Data (Pending Follow Requests & Active Connections)
   const loadSocialData = async () => {
     if (!userProfile) return;
     setIsLoadingRequests(true);
@@ -63,6 +63,17 @@ export default function ProfileModal({ onClose, onSelectFriend, activeFriendUser
   const handleDecline = async (reqId) => {
     await declineFriendRequest(reqId);
     loadSocialData();
+  };
+
+  const handleUnfollow = async (friend) => {
+    const friendName = friend.displayName || friend.email;
+    if (window.confirm(`Are you sure you want to unfollow "${friendName}"?`)) {
+      await unfollowUser(userProfile.uid, userProfile.email, friend.uid, friend.email);
+      if (activeFriendUser && (activeFriendUser.uid === friend.uid || activeFriendUser.email === friend.email)) {
+        if (onSelectFriend) onSelectFriend(null);
+      }
+      loadSocialData();
+    }
   };
 
   // Perform HTML5 Canvas Circular Crop with Zoom & Position offset
@@ -544,18 +555,30 @@ export default function ProfileModal({ onClose, onSelectFriend, activeFriendUser
                           </div>
                         </div>
 
-                        {onSelectFriend && (
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {onSelectFriend && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onSelectFriend(friend);
+                                onClose();
+                              }}
+                              className="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-md transition-all active:scale-95"
+                              title="View Profile & Challenges"
+                            >
+                              <span>View</span>
+                            </button>
+                          )}
                           <button
                             type="button"
-                            onClick={() => {
-                              onSelectFriend(friend);
-                              onClose();
-                            }}
-                            className="px-3 py-1 rounded-full text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-md transition-all shrink-0 active:scale-95"
+                            onClick={() => handleUnfollow(friend)}
+                            className="px-2.5 py-1 rounded-full text-xs font-medium bg-[#1e1f20] hover:bg-rose-500/20 text-gray-400 hover:text-rose-400 border border-neutral-700/50 transition-all flex items-center gap-1 active:scale-95"
+                            title={`Unfollow ${friend.displayName || friend.email}`}
                           >
-                            View Profile
+                            <UserMinus className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">Unfollow</span>
                           </button>
-                        )}
+                        </div>
                       </div>
                     );
                   })}
@@ -568,13 +591,13 @@ export default function ProfileModal({ onClose, onSelectFriend, activeFriendUser
               )}
             </div>
 
-            {/* Dedicated Pending Friend Requests Section */}
+            {/* Dedicated Follow Requests Section */}
             <div className="bg-[#131314] border border-neutral-800/80 rounded-2xl p-4 text-left space-y-3 shadow-inner">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Bell className="w-4 h-4 text-blue-400" />
                   <h4 className="text-xs font-bold text-gray-200 uppercase tracking-wider">
-                    Friend Requests ({pendingRequests.length})
+                    Follow Requests ({pendingRequests.length})
                   </h4>
                 </div>
                 {pendingRequests.length > 0 && (
@@ -607,7 +630,7 @@ export default function ProfileModal({ onClose, onSelectFriend, activeFriendUser
                           type="button"
                           onClick={() => handleAccept(req)}
                           className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-full text-xs font-bold transition-all shadow-md flex items-center gap-1 active:scale-95"
-                          title="Accept Friend Request"
+                          title="Accept Follow Request"
                         >
                           <Check className="w-3.5 h-3.5" />
                           <span>Accept</span>
@@ -627,7 +650,7 @@ export default function ProfileModal({ onClose, onSelectFriend, activeFriendUser
               ) : (
                 <div className="text-center py-3 text-gray-500 space-y-1">
                   <CheckCircle2 className="w-5 h-5 text-gray-600 mx-auto" />
-                  <p className="text-xs">No pending friend requests</p>
+                  <p className="text-xs">No pending follow requests</p>
                 </div>
               )}
             </div>

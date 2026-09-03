@@ -281,6 +281,83 @@ export async function fetchFriends(currentUid, currentEmail) {
 }
 
 /**
+ * Unfollow / Remove Connection (Instant 0ms local delete + background cloud sync)
+ */
+export async function unfollowUser(currentUid, currentEmail, targetUid, targetEmail) {
+  const cleanCurrentEmail = (currentEmail || '').trim().toLowerCase();
+  const cleanCurrentUid = (currentUid || '').trim().toLowerCase();
+  const cleanTargetEmail = (targetEmail || '').trim().toLowerCase();
+  const cleanTargetUid = (targetUid || '').trim().toLowerCase();
+
+  const localReqs = getLocalFriendships();
+  const removedIds = [];
+
+  const filtered = localReqs.filter(r => {
+    if (!r) return false;
+    const sEmail = (r.senderEmail || '').trim().toLowerCase();
+    const sUid = (r.senderUid || '').trim().toLowerCase();
+    const rEmail = (r.receiverEmail || '').trim().toLowerCase();
+    const rUid = (r.receiverUid || '').trim().toLowerCase();
+
+    const isMatch1 = ((cleanCurrentEmail && sEmail === cleanCurrentEmail) || (cleanCurrentUid && sUid === cleanCurrentUid)) &&
+                     ((cleanTargetEmail && rEmail === cleanTargetEmail) || (cleanTargetUid && rUid === cleanTargetUid));
+
+    const isMatch2 = ((cleanCurrentEmail && rEmail === cleanCurrentEmail) || (cleanCurrentUid && rUid === cleanCurrentUid)) &&
+                     ((cleanTargetEmail && sEmail === cleanTargetEmail) || (cleanTargetUid && sUid === cleanTargetUid));
+
+    if (isMatch1 || isMatch2) {
+      removedIds.push(r.id);
+      return false;
+    }
+    return true;
+  });
+
+  saveLocalFriendships(filtered);
+
+  // Background Firestore deletion
+  (async () => {
+    for (const reqId of removedIds) {
+      try {
+        await deleteDoc(doc(db, 'friendships', reqId));
+      } catch (e) {
+        console.warn("Firestore unfollow note:", e);
+      }
+    }
+  })();
+}
+
+/**
+ * Get Relationship Status between Current User and Target User
+ * Returns: 'none' | 'pending' | 'accepted'
+ */
+export function getRelationshipStatus(currentUid, currentEmail, targetUid, targetEmail) {
+  const cleanCurrentEmail = (currentEmail || '').trim().toLowerCase();
+  const cleanCurrentUid = (currentUid || '').trim().toLowerCase();
+  const cleanTargetEmail = (targetEmail || '').trim().toLowerCase();
+  const cleanTargetUid = (targetUid || '').trim().toLowerCase();
+
+  const localReqs = getLocalFriendships();
+  for (const r of localReqs) {
+    if (!r) continue;
+    const sEmail = (r.senderEmail || '').trim().toLowerCase();
+    const sUid = (r.senderUid || '').trim().toLowerCase();
+    const rEmail = (r.receiverEmail || '').trim().toLowerCase();
+    const rUid = (r.receiverUid || '').trim().toLowerCase();
+
+    const isMatch1 = ((cleanCurrentEmail && sEmail === cleanCurrentEmail) || (cleanCurrentUid && sUid === cleanCurrentUid)) &&
+                     ((cleanTargetEmail && rEmail === cleanTargetEmail) || (cleanTargetUid && rUid === cleanTargetUid));
+
+    const isMatch2 = ((cleanCurrentEmail && rEmail === cleanCurrentEmail) || (cleanCurrentUid && rUid === cleanCurrentUid)) &&
+                     ((cleanTargetEmail && sEmail === cleanTargetEmail) || (cleanTargetUid && sUid === cleanTargetUid));
+
+    if (isMatch1 || isMatch2) {
+      return r.status || 'pending';
+    }
+  }
+  return 'none';
+}
+
+/**
  * Fetch Friend's Challenges for Read-Only Dashboard (Instant 0ms local read)
  */
 export async function fetchFriendChallenges(friendUid, friendEmail) {
