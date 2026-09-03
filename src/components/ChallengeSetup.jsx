@@ -2,9 +2,9 @@ import React, { useState } from 'react';
 import { Calendar as CalendarIcon, Sparkles, Rocket, ArrowRight, Target, AlertCircle, ArrowLeft, CalendarDays } from 'lucide-react';
 
 export default function ChallengeSetup({ onCreateChallenge, onCancel, hasExistingChallenges }) {
-  const [challengeName, setChallengeName] = useState('New Custom Challenge');
-  const [startDate, setStartDate] = useState('2026-09-01');
-  const [endDate, setEndDate] = useState('2026-11-30');
+  const [challengeName, setChallengeName] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
   const calculateDays = () => {
@@ -17,6 +17,11 @@ export default function ChallengeSetup({ onCreateChallenge, onCancel, hasExistin
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (!challengeName.trim()) {
+      setErrorMsg('Please enter a challenge title.');
+      return;
+    }
+
     if (!startDate || !endDate) {
       setErrorMsg('Please select both a start date and an end date.');
       return;
@@ -36,7 +41,7 @@ export default function ChallengeSetup({ onCreateChallenge, onCancel, hasExistin
 
     setErrorMsg('');
     onCreateChallenge({
-      name: challengeName.trim() || 'Custom Challenge',
+      name: challengeName.trim(),
       startDate,
       endDate
     });
@@ -85,9 +90,12 @@ export default function ChallengeSetup({ onCreateChallenge, onCancel, hasExistin
             </label>
             <input
               type="text"
-              placeholder="e.g., Q4 Engineering Sprint"
+              placeholder="Enter challenge title (e.g., 90-Day Coding Challenge)"
               value={challengeName}
-              onChange={(e) => setChallengeName(e.target.value)}
+              onChange={(e) => {
+                setChallengeName(e.target.value);
+                if (errorMsg) setErrorMsg('');
+              }}
               className="w-full bg-[#131314] border border-neutral-800 rounded-full px-5 py-3 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500/50 transition-all"
             />
           </div>
@@ -117,13 +125,11 @@ export default function ChallengeSetup({ onCreateChallenge, onCancel, hasExistin
                     type="date"
                     value={startDate}
                     onChange={(e) => {
-                      if (e.target.value) {
-                        setStartDate(e.target.value);
-                        if (endDate && endDate < e.target.value) {
-                          setEndDate(e.target.value);
-                        }
-                        setErrorMsg('');
+                      setStartDate(e.target.value);
+                      if (endDate && e.target.value && endDate < e.target.value) {
+                        setEndDate(e.target.value);
                       }
+                      if (errorMsg) setErrorMsg('');
                     }}
                     className="w-full bg-transparent text-xs font-bold text-gray-100 font-mono focus:outline-none cursor-pointer color-scheme-dark"
                   />
@@ -141,12 +147,10 @@ export default function ChallengeSetup({ onCreateChallenge, onCancel, hasExistin
                   <input
                     type="date"
                     value={endDate}
-                    min={startDate}
+                    min={startDate || undefined}
                     onChange={(e) => {
-                      if (e.target.value) {
-                        setEndDate(e.target.value);
-                        setErrorMsg('');
-                      }
+                      setEndDate(e.target.value);
+                      if (errorMsg) setErrorMsg('');
                     }}
                     className="w-full bg-transparent text-xs font-bold text-gray-100 font-mono focus:outline-none cursor-pointer color-scheme-dark"
                   />
