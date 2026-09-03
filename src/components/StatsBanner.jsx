@@ -14,7 +14,7 @@ export default function StatsBanner({ stats, challengeConfig }) {
             <span>{challengeConfig?.name || "Challenge Overview"}</span>
           </h3>
           <p className="text-xs text-gray-400 mt-0.5">
-            Real-time aggregate performance metrics ({challengeConfig?.startDate} to {challengeConfig?.endDate})
+            Real-time aggregate performance metrics ({challengeConfig?.startDate} → {(!challengeConfig?.endDate || challengeConfig?.endDate === 'ongoing') ? 'Ongoing Daily Goal ♾️' : challengeConfig?.endDate})
           </p>
         </div>
 

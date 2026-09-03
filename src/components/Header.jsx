@@ -30,7 +30,7 @@ export default function Header({
                 <span>{viewMode === 'admin' ? "Admin Control Panel" : activeChallenge?.name || "Stella"}</span>
                 {viewMode !== 'admin' && activeChallenge && (
                   <span className="text-xs bg-[#1e1f20] text-gray-400 border border-neutral-800 px-3 py-0.5 rounded-full font-normal">
-                    {activeChallenge.startDate} → {activeChallenge.endDate}
+                    {activeChallenge.startDate} → {(!activeChallenge.endDate || activeChallenge.endDate === 'ongoing') ? 'Ongoing Daily ♾️' : activeChallenge.endDate}
                   </span>
                 )}
                 {viewMode === 'admin' && (

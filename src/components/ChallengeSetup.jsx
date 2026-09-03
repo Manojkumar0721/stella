@@ -1,18 +1,20 @@
 import React, { useState } from 'react';
-import { Calendar as CalendarIcon, Sparkles, Rocket, ArrowRight, Target, AlertCircle, ArrowLeft, CalendarDays } from 'lucide-react';
+import { Calendar as CalendarIcon, Sparkles, Rocket, ArrowRight, Target, AlertCircle, ArrowLeft, CalendarDays, Check } from 'lucide-react';
 
 export default function ChallengeSetup({ onCreateChallenge, onCancel, hasExistingChallenges }) {
   const [challengeName, setChallengeName] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [isOngoing, setIsOngoing] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
   const calculateDays = () => {
-    if (!startDate || !endDate) return 0;
+    if (isOngoing) return 'Ongoing Daily Goal ♾️';
+    if (!startDate || !endDate || endDate === 'ongoing') return '0 Days';
     const d1 = new Date(startDate);
     const d2 = new Date(endDate);
     const diff = Math.abs(d2 - d1);
-    return Math.ceil(diff / (1000 * 60 * 60 * 24)) + 1;
+    return `${Math.ceil(diff / (1000 * 60 * 60 * 24)) + 1} Days`;
   };
 
   const handleSubmit = (e) => {
@@ -22,28 +24,37 @@ export default function ChallengeSetup({ onCreateChallenge, onCancel, hasExistin
       return;
     }
 
-    if (!startDate || !endDate) {
-      setErrorMsg('Please select both a start date and an end date.');
+    if (!startDate) {
+      setErrorMsg('Please select a start date.');
       return;
     }
 
-    if (startDate > endDate) {
+    if (!isOngoing && !endDate) {
+      setErrorMsg('Please select an end date or check "Ongoing Daily Challenge".');
+      return;
+    }
+
+    if (!isOngoing && startDate > endDate) {
       setErrorMsg('Start date cannot be after end date.');
       return;
     }
 
-    const diffDays = calculateDays();
-
-    if (diffDays > 366) {
-      setErrorMsg('Challenge duration cannot exceed 1 year (366 days).');
-      return;
+    if (!isOngoing) {
+      const d1 = new Date(startDate);
+      const d2 = new Date(endDate);
+      const diffDays = Math.ceil(Math.abs(d2 - d1) / (1000 * 60 * 60 * 24)) + 1;
+      if (diffDays > 366) {
+        setErrorMsg('Challenge duration cannot exceed 1 year (366 days).');
+        return;
+      }
     }
 
     setErrorMsg('');
     onCreateChallenge({
       name: challengeName.trim(),
       startDate,
-      endDate
+      endDate: isOngoing ? 'ongoing' : endDate,
+      isOngoing
     });
   };
 
@@ -78,7 +89,7 @@ export default function ChallengeSetup({ onCreateChallenge, onCancel, hasExistin
           </h1>
 
           <p className="text-sm text-gray-400 leading-relaxed">
-            Define a title and date range for your challenge to track daily tasks in Stella.
+            Define a title and date range or daily ongoing habit to track tasks in Stella.
           </p>
         </div>
 
@@ -90,7 +101,7 @@ export default function ChallengeSetup({ onCreateChallenge, onCancel, hasExistin
             </label>
             <input
               type="text"
-              placeholder="Enter challenge title (e.g., 90-Day Coding Challenge)"
+              placeholder="Enter challenge title (e.g., Daily Coding & Fitness Habit)"
               value={challengeName}
               onChange={(e) => {
                 setChallengeName(e.target.value);
@@ -100,7 +111,41 @@ export default function ChallengeSetup({ onCreateChallenge, onCancel, hasExistin
             />
           </div>
 
-          {/* Simple & Minimal 2-Column Date Input Selection */}
+          {/* Ongoing Challenge Toggle Card */}
+          <div 
+            onClick={() => {
+              const next = !isOngoing;
+              setIsOngoing(next);
+              if (next) {
+                setEndDate('ongoing');
+              } else {
+                setEndDate('');
+              }
+              if (errorMsg) setErrorMsg('');
+            }}
+            className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+              isOngoing 
+                ? 'bg-blue-600/15 border-blue-500/50 text-white shadow-md'
+                : 'bg-[#131314] border-neutral-800 text-gray-300 hover:border-neutral-700'
+            }`}
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <div className={`w-5 h-5 rounded-lg border flex items-center justify-center transition-all shrink-0 ${
+                isOngoing ? 'bg-blue-600 border-blue-500 text-white' : 'bg-[#1e1f20] border-neutral-700'
+              }`}>
+                {isOngoing && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-gray-100">Ongoing Daily Challenge (No End Date)</p>
+                <p className="text-[11px] text-gray-400 truncate">Track daily topics continuously without a fixed end date</p>
+              </div>
+            </div>
+            <span className="text-[10px] bg-blue-500/20 text-blue-300 font-mono font-bold px-2.5 py-1 rounded-full border border-blue-500/30 shrink-0">
+              Daily Goal ♾️
+            </span>
+          </div>
+
+          {/* Simple 2-Column Date Input Selection */}
           <div className="space-y-2.5">
             <div className="flex items-center justify-between text-xs text-gray-300 font-semibold px-0.5">
               <span className="flex items-center gap-1.5">
@@ -108,7 +153,7 @@ export default function ChallengeSetup({ onCreateChallenge, onCancel, hasExistin
                 <span>Challenge Dates</span>
               </span>
               <span className="text-blue-400 font-mono text-[11px]">
-                Duration: <strong className="font-extrabold">{calculateDays()} Days</strong>
+                Duration: <strong className="font-extrabold">{calculateDays()}</strong>
               </span>
             </div>
 
@@ -126,7 +171,7 @@ export default function ChallengeSetup({ onCreateChallenge, onCancel, hasExistin
                     value={startDate}
                     onChange={(e) => {
                       setStartDate(e.target.value);
-                      if (endDate && e.target.value && endDate < e.target.value) {
+                      if (!isOngoing && endDate && e.target.value && endDate < e.target.value) {
                         setEndDate(e.target.value);
                       }
                       if (errorMsg) setErrorMsg('');
@@ -143,18 +188,25 @@ export default function ChallengeSetup({ onCreateChallenge, onCancel, hasExistin
                   <span>End Date</span>
                 </label>
 
-                <div className="relative flex items-center bg-[#131314] border border-neutral-800 hover:border-indigo-500/50 rounded-2xl p-3 transition-all focus-within:ring-1 focus-within:ring-indigo-500/50 shadow-sm">
-                  <input
-                    type="date"
-                    value={endDate}
-                    min={startDate || undefined}
-                    onChange={(e) => {
-                      setEndDate(e.target.value);
-                      if (errorMsg) setErrorMsg('');
-                    }}
-                    className="w-full bg-transparent text-xs font-bold text-gray-100 font-mono focus:outline-none cursor-pointer color-scheme-dark"
-                  />
-                </div>
+                {isOngoing ? (
+                  <div className="flex items-center justify-between bg-[#131314] border border-neutral-800/60 rounded-2xl p-3 text-xs text-gray-400 font-mono italic">
+                    <span>No End Date (Ongoing)</span>
+                    <span className="text-[10px] text-blue-400 font-bold not-italic">♾️</span>
+                  </div>
+                ) : (
+                  <div className="relative flex items-center bg-[#131314] border border-neutral-800 hover:border-indigo-500/50 rounded-2xl p-3 transition-all focus-within:ring-1 focus-within:ring-indigo-500/50 shadow-sm">
+                    <input
+                      type="date"
+                      value={endDate === 'ongoing' ? '' : endDate}
+                      min={startDate || undefined}
+                      onChange={(e) => {
+                        setEndDate(e.target.value);
+                        if (errorMsg) setErrorMsg('');
+                      }}
+                      className="w-full bg-transparent text-xs font-bold text-gray-100 font-mono focus:outline-none cursor-pointer color-scheme-dark"
+                    />
+                  </div>
+                )}
               </div>
             </div>
           </div>

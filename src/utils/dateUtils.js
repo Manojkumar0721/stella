@@ -31,17 +31,27 @@ export const formatDisplayDate = (dateStr) => {
  * Returns array of objects: [{ year, month, name, shortName, daysCount }, ...]
  */
 export const getMonthsInRange = (startDateStr, endDateStr) => {
-  if (!startDateStr || !endDateStr) return [];
+  if (!startDateStr) return [];
 
   const [startYear, startMonth] = startDateStr.split('-').map(Number);
-  const [endYear, endMonth] = endDateStr.split('-').map(Number);
+
+  let targetYear, targetMonth;
+  
+  if (!endDateStr || endDateStr === 'ongoing' || endDateStr === '2099-12-31') {
+    // For ongoing daily challenges, generate months from start date up to 3 months past current date
+    const today = new Date();
+    const futureDate = new Date(today.getFullYear(), today.getMonth() + 3, 1);
+    targetYear = Math.max(futureDate.getFullYear(), startYear);
+    targetMonth = futureDate.getMonth();
+  } else {
+    const [endYear, endMonth] = endDateStr.split('-').map(Number);
+    targetYear = endYear;
+    targetMonth = endMonth - 1;
+  }
 
   const months = [];
   let currYear = startYear;
   let currMonth = startMonth - 1; // 0-indexed for Date
-
-  const targetYear = endYear;
-  const targetMonth = endMonth - 1;
 
   while (currYear < targetYear || (currYear === targetYear && currMonth <= targetMonth)) {
     const dateObj = new Date(currYear, currMonth, 1);
@@ -71,7 +81,10 @@ export const getMonthsInRange = (startDateStr, endDateStr) => {
  * Check if a date string falls strictly between startDateStr and endDateStr inclusive
  */
 export const isDateInRange = (dateStr, startDateStr, endDateStr) => {
-  if (!dateStr || !startDateStr || !endDateStr) return false;
+  if (!dateStr || !startDateStr) return false;
+  if (!endDateStr || endDateStr === 'ongoing' || endDateStr === '2099-12-31') {
+    return dateStr >= startDateStr;
+  }
   return dateStr >= startDateStr && dateStr <= endDateStr;
 };
 
@@ -112,7 +125,7 @@ export const getMonthGridDays = (year, monthIndex) => {
  * Get previous and next valid date within challenge date bounds
  */
 export const getAdjacentDates = (dateStr, startDateStr, endDateStr) => {
-  if (!dateStr) return { prev: null, next: null };
+  if (!dateStr || !startDateStr) return { prev: null, next: null };
   const [y, m, d] = dateStr.split('-').map(Number);
   const current = new Date(y, m - 1, d);
   
