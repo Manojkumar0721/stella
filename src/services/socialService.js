@@ -156,13 +156,23 @@ export async function sendFriendRequest(senderProfile, targetUser) {
 export async function fetchPendingRequests(currentUid, currentEmail) {
   const cleanEmail = (currentEmail || '').trim().toLowerCase();
   const cleanUid = (currentUid || '').trim().toLowerCase();
+  const registry = getLocalUserRegistry();
 
-  // Instant local read
+  // Instant local read - filter out pending requests from users deleted by admin
   const localReqs = getLocalFriendships().filter(r => {
     if (!r || r.status !== 'pending') return false;
     const rEmail = (r.receiverEmail || '').trim().toLowerCase();
     const rUid = (r.receiverUid || '').trim().toLowerCase();
-    return (cleanEmail && rEmail === cleanEmail) || (cleanUid && rUid === cleanUid);
+    const sEmail = (r.senderEmail || '').trim().toLowerCase();
+    const sUid = (r.senderUid || '').trim().toLowerCase();
+
+    const isTarget = (cleanEmail && rEmail === cleanEmail) || (cleanUid && rUid === cleanUid);
+    if (!isTarget) return false;
+
+    const senderExists = registry.some(u => 
+      u && ((u.email && u.email.trim().toLowerCase() === sEmail) || (u.uid && u.uid.trim().toLowerCase() === sUid))
+    );
+    return senderExists;
   });
 
   return localReqs;
@@ -254,26 +264,20 @@ export async function fetchFriends(currentUid, currentEmail) {
     }
   });
 
-  // Resolve friend profiles against local user registry
+  // Resolve friend profiles against local user registry - strictly omit users deleted by admin
   const registry = getLocalUserRegistry();
   const result = [];
 
   for (const [key, basicInfo] of friendMap.entries()) {
     const found = registry.find(u => 
-      (u.email && u.email.trim().toLowerCase() === basicInfo.email) ||
-      (u.uid && u.uid.trim().toLowerCase() === basicInfo.uid)
+      u && (
+        (u.email && u.email.trim().toLowerCase() === basicInfo.email) ||
+        (u.uid && u.uid.trim().toLowerCase() === basicInfo.uid)
+      )
     );
 
     if (found) {
       result.push(found);
-    } else {
-      result.push({
-        uid: basicInfo.uid,
-        email: basicInfo.email,
-        displayName: basicInfo.displayName || basicInfo.email,
-        username: basicInfo.username,
-        avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${basicInfo.email}`
-      });
     }
   }
 
