@@ -1,24 +1,31 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, setDoc } from 'firebase/firestore';
 import { db, storage } from '../firebase';
 import { 
   fetchPendingRequests, acceptFriendRequest, declineFriendRequest 
 } from '../services/socialService';
 import { 
-  X, Camera, Check, Upload, User, Mail, Sparkles, LogOut, Loader2, Bell, UserCheck, UserX, CheckCircle2 
+  X, Camera, Check, Upload, User, Mail, Sparkles, LogOut, Loader2, Bell, UserCheck, UserX, CheckCircle2,
+  ZoomIn, ZoomOut, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Move, RotateCcw
 } from 'lucide-react';
 
 export default function ProfileModal({ onClose }) {
   const { userProfile, updateProfileAvatar, logout } = useAuth();
   
   const [selectedImage, setSelectedImage] = useState(null);
-  const [croppedImageBlob, setCroppedImageBlob] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
+
+  // Customization state: Zoom level & 2D Position Offsets (Pan)
   const [zoomLevel, setZoomLevel] = useState(1);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+
+  // Mouse & Touch Drag state
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   
   const [pendingRequests, setPendingRequests] = useState([]);
   const [isLoadingRequests, setIsLoadingRequests] = useState(false);
@@ -50,6 +57,58 @@ export default function ProfileModal({ onClose }) {
     loadRequests();
   };
 
+  // Perform HTML5 Canvas Circular Crop with Zoom & Position offset
+  const updateCropCanvas = (img, zoom, pos) => {
+    if (!img) return;
+    const canvas = canvasRef.current || document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    const size = 320; // 320x320 high resolution output
+    canvas.width = size;
+    canvas.height = size;
+    
+    ctx.clearRect(0, 0, size, size);
+    
+    ctx.save();
+    
+    // Draw circular clip path
+    ctx.beginPath();
+    ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+    ctx.closePath();
+    ctx.clip();
+    
+    // Background fill in case image is panned
+    ctx.fillStyle = '#131314';
+    ctx.fillRect(0, 0, size, size);
+    
+    // Calculate scale and dimensions to cover container
+    const baseScale = Math.max(size / img.width, size / img.height);
+    const drawWidth = img.width * baseScale * zoom;
+    const drawHeight = img.height * baseScale * zoom;
+    
+    // Center coordinates with positional offsets (Up/Down/Left/Right)
+    const drawX = (size - drawWidth) / 2 + pos.x;
+    const drawY = (size - drawHeight) / 2 + pos.y;
+    
+    ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
+    
+    ctx.restore();
+    
+    try {
+      const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.9);
+      setPreviewUrl(croppedDataUrl);
+    } catch (err) {
+      console.error("Canvas export error:", err);
+    }
+  };
+
+  // Trigger canvas updates whenever zoom, position, or image changes
+  useEffect(() => {
+    if (imageRef.current && selectedImage) {
+      updateCropCanvas(imageRef.current, zoomLevel, position);
+    }
+  }, [zoomLevel, position, selectedImage]);
+
   // Handle File Selection
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
@@ -63,51 +122,86 @@ export default function ProfileModal({ onClose }) {
     const reader = new FileReader();
     reader.onload = () => {
       setSelectedImage(reader.result);
-      processCircularCrop(reader.result, 1);
+      setZoomLevel(1);
+      setPosition({ x: 0, y: 0 });
+
+      const img = new Image();
+      img.src = reader.result;
+      img.onload = () => {
+        imageRef.current = img;
+        updateCropCanvas(img, 1, { x: 0, y: 0 });
+      };
     };
     reader.readAsDataURL(file);
   };
 
-  // Perform HTML5 Canvas Circular Crop
-  const processCircularCrop = (imageDataUrl, scale) => {
-    const img = new Image();
-    img.src = imageDataUrl;
-    img.onload = () => {
-      imageRef.current = img;
-      const canvas = canvasRef.current || document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      
-      const size = 300;
-      canvas.width = size;
-      canvas.height = size;
-      
-      ctx.clearRect(0, 0, size, size);
-      
-      // Draw circular clip path
-      ctx.beginPath();
-      ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
-      ctx.closePath();
-      ctx.clip();
-      
-      // Calculate aspect ratio crop
-      const minDim = Math.min(img.width, img.height);
-      const startX = (img.width - minDim) / 2;
-      const startY = (img.height - minDim) / 2;
-      
-      ctx.drawImage(
-        img,
-        startX, startY, minDim, minDim,
-        0, 0, size, size
-      );
-      
-      const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.9);
-      setPreviewUrl(croppedDataUrl);
-    };
+  const triggerFileInput = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+      fileInputRef.current.click();
+    }
   };
 
-  // Upload Cropped Avatar to Cloud Storage & Update Database
+  // Positional Pan (Up, Down, Left, Right) Controls
+  const handlePan = (dx, dy) => {
+    setPosition(prev => ({
+      x: prev.x + dx,
+      y: prev.y + dy
+    }));
+  };
+
+  const handleReset = () => {
+    setZoomLevel(1);
+    setPosition({ x: 0, y: 0 });
+  };
+
+  // Mouse Drag Handlers for direct interactive panning
+  const handleMouseDown = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+    setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y });
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isDragging) return;
+    setPosition({
+      x: e.clientX - dragStart.x,
+      y: e.clientY - dragStart.y
+    });
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  // Touch Drag Handlers for Mobile Devices
+  const handleTouchStart = (e) => {
+    if (e.touches.length === 1) {
+      const touch = e.touches[0];
+      setIsDragging(true);
+      setDragStart({ x: touch.clientX - position.x, y: touch.clientY - position.y });
+    }
+  };
+
+  const handleTouchMove = (e) => {
+    if (!isDragging || e.touches.length !== 1) return;
+    const touch = e.touches[0];
+    setPosition({
+      x: touch.clientX - dragStart.x,
+      y: touch.clientY - dragStart.y
+    });
+  };
+
+  const handleTouchEnd = () => {
+    setIsDragging(false);
+  };
+
+  // Upload Cropped Avatar to Cloud Storage & Update Database & Auth Context
   const handleSaveAvatar = async () => {
-    if (!previewUrl || !userProfile?.uid) return;
+    if (!previewUrl || !userProfile?.uid) {
+      alert('Unable to save profile picture. User session not active.');
+      return;
+    }
     setIsUploading(true);
 
     try {
@@ -122,16 +216,16 @@ export default function ProfileModal({ onClose }) {
         console.warn("Cloud Storage upload notice, using optimized base64 URL fallback:", storageErr);
       }
 
-      // Update Firestore user document
+      // Update Firestore user document with merge: true
       try {
-        await updateDoc(doc(db, 'users', userProfile.uid), {
+        await setDoc(doc(db, 'users', userProfile.uid), {
           avatarUrl: downloadURL
-        });
+        }, { merge: true });
       } catch (dbErr) {
         console.warn("Firestore profile update fallback:", dbErr);
       }
 
-      // Update local state in AuthContext
+      // Update local state in AuthContext & LocalStorage
       if (updateProfileAvatar) {
         updateProfileAvatar(downloadURL);
       }
@@ -142,6 +236,7 @@ export default function ProfileModal({ onClose }) {
         setUploadSuccess(false);
       }, 1500);
     } catch (err) {
+      console.error("Save avatar error:", err);
       alert('Failed to save profile picture. Please try again.');
     } finally {
       setIsUploading(false);
@@ -159,7 +254,9 @@ export default function ProfileModal({ onClose }) {
         <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-blue-400" />
-            <h2 className="text-sm font-bold text-gray-100">Profile & Requests</h2>
+            <h2 className="text-sm font-bold text-gray-100">
+              {selectedImage ? "Customize Profile Picture" : "Profile & Requests"}
+            </h2>
           </div>
           <button
             onClick={onClose}
@@ -170,31 +267,178 @@ export default function ProfileModal({ onClose }) {
         </div>
 
         {selectedImage ? (
-          /* Circular Cropper Preview View */
+          /* Circular Avatar Customizer View */
           <div className="space-y-5 text-center">
-            <p className="text-xs font-medium text-gray-300">Adjust & Save Circular Avatar</p>
+            <div>
+              <p className="text-xs font-medium text-gray-300">
+                Drag to adjust position or use zoom & directional controls
+              </p>
+            </div>
             
-            <div className="relative w-36 h-36 mx-auto rounded-full overflow-hidden border-2 border-blue-500 shadow-xl bg-[#131314]">
-              {previewUrl && (
-                <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
+            {/* Interactive Circular Preview */}
+            <div 
+              className="relative w-44 h-44 sm:w-48 sm:h-48 mx-auto rounded-full overflow-hidden border-2 border-blue-500 shadow-2xl bg-[#131314] cursor-grab active:cursor-grabbing select-none group touch-none"
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseUp}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+            >
+              {previewUrl ? (
+                <img 
+                  src={previewUrl} 
+                  alt="Avatar Preview" 
+                  className="w-full h-full object-cover pointer-events-none" 
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-gray-500 text-xs">
+                  Loading preview...
+                </div>
               )}
+
+              {/* Hover overlay hint */}
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center pointer-events-none text-white gap-1">
+                <Move className="w-6 h-6 text-blue-400 animate-pulse" />
+                <span className="text-[10px] font-semibold">Drag to Pan</span>
+              </div>
             </div>
 
             <canvas ref={canvasRef} className="hidden" />
 
-            <div className="flex items-center justify-center gap-3 pt-2">
+            {/* Zoom Controls */}
+            <div className="bg-[#131314] p-3 rounded-2xl border border-neutral-800/80 space-y-2">
+              <div className="flex items-center justify-between text-xs text-gray-300 font-medium px-1">
+                <span className="flex items-center gap-1.5">
+                  <ZoomIn className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Zoom Level</span>
+                </span>
+                <span className="font-mono text-blue-400 font-bold">{Math.round(zoomLevel * 100)}%</span>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setZoomLevel(prev => Math.max(1, +(prev - 0.1).toFixed(2)))}
+                  className="p-1.5 rounded-full bg-[#1e1f20] hover:bg-[#282a2c] text-gray-300 transition-colors border border-neutral-800 shrink-0 active:scale-95"
+                  title="Zoom Out"
+                >
+                  <ZoomOut className="w-4 h-4" />
+                </button>
+                <input
+                  type="range"
+                  min="1"
+                  max="3"
+                  step="0.05"
+                  value={zoomLevel}
+                  onChange={(e) => setZoomLevel(parseFloat(e.target.value))}
+                  className="w-full accent-blue-500 cursor-pointer h-1.5 bg-[#282a2c] rounded-lg appearance-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setZoomLevel(prev => Math.min(3, +(prev + 0.1).toFixed(2)))}
+                  className="p-1.5 rounded-full bg-[#1e1f20] hover:bg-[#282a2c] text-gray-300 transition-colors border border-neutral-800 shrink-0 active:scale-95"
+                  title="Zoom In"
+                >
+                  <ZoomIn className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Directional Position Controls (Up, Down, Left, Right & Reset) */}
+            <div className="bg-[#131314] p-3 rounded-2xl border border-neutral-800/80 flex items-center justify-between gap-2">
+              <div className="text-left space-y-0.5 min-w-0">
+                <p className="text-xs font-bold text-gray-200">Position Controls</p>
+                <p className="text-[10px] text-gray-400">Pan up, down, left & right</p>
+              </div>
+
+              {/* Compact Directional D-Pad */}
+              <div className="bg-[#1e1f20] p-1.5 rounded-2xl border border-neutral-800 shrink-0">
+                <div className="grid grid-cols-3 gap-1">
+                  <div />
+                  <button
+                    type="button"
+                    onClick={() => handlePan(0, -15)}
+                    className="p-1.5 rounded-lg bg-[#282a2c] hover:bg-blue-600 text-gray-200 hover:text-white transition-colors active:scale-95 flex items-center justify-center"
+                    title="Pan Up"
+                  >
+                    <ArrowUp className="w-3.5 h-3.5" />
+                  </button>
+                  <div />
+
+                  <button
+                    type="button"
+                    onClick={() => handlePan(-15, 0)}
+                    className="p-1.5 rounded-lg bg-[#282a2c] hover:bg-blue-600 text-gray-200 hover:text-white transition-colors active:scale-95 flex items-center justify-center"
+                    title="Pan Left"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleReset}
+                    className="p-1.5 rounded-lg bg-[#131314] hover:bg-neutral-700 text-amber-400 transition-colors active:scale-95 flex items-center justify-center"
+                    title="Reset Zoom & Position"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handlePan(15, 0)}
+                    className="p-1.5 rounded-lg bg-[#282a2c] hover:bg-blue-600 text-gray-200 hover:text-white transition-colors active:scale-95 flex items-center justify-center"
+                    title="Pan Right"
+                  >
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+
+                  <div />
+                  <button
+                    type="button"
+                    onClick={() => handlePan(0, 15)}
+                    className="p-1.5 rounded-lg bg-[#282a2c] hover:bg-blue-600 text-gray-200 hover:text-white transition-colors active:scale-95 flex items-center justify-center"
+                    title="Pan Down"
+                  >
+                    <ArrowDown className="w-3.5 h-3.5" />
+                  </button>
+                  <div />
+                </div>
+              </div>
+            </div>
+
+            {/* Hidden Input for re-selecting file */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileChange}
+              className="hidden"
+            />
+
+            {/* Footer Action Buttons */}
+            <div className="flex items-center justify-center gap-2 pt-1 flex-wrap sm:flex-nowrap">
               <button
                 type="button"
-                onClick={() => setSelectedImage(null)}
-                className="px-4 py-2 rounded-full text-xs font-medium bg-[#131314] text-gray-400 hover:text-white border border-neutral-800"
+                onClick={() => {
+                  setSelectedImage(null);
+                  handleReset();
+                }}
+                className="px-3.5 py-2 rounded-full text-xs font-medium bg-[#131314] text-gray-400 hover:text-white border border-neutral-800 transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="button"
+                onClick={triggerFileInput}
+                className="px-3.5 py-2 rounded-full text-xs font-medium bg-[#131314] text-gray-300 hover:text-white border border-neutral-800 transition-colors"
+              >
+                Change Photo
+              </button>
+              <button
+                type="button"
                 onClick={handleSaveAvatar}
                 disabled={isUploading}
-                className="px-5 py-2 rounded-full text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-md flex items-center gap-1.5 disabled:opacity-50"
+                className="px-4 py-2 rounded-full text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-md flex items-center gap-1.5 disabled:opacity-50 transition-all active:scale-95"
               >
                 {isUploading ? (
                   <>
@@ -218,8 +462,8 @@ export default function ProfileModal({ onClose }) {
         ) : (
           /* Main Profile Menu View */
           <div className="space-y-6 text-center">
-            {/* Avatar with Camera Crop Overlay */}
-            <div className="relative w-24 h-24 mx-auto group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+            {/* Avatar with Camera Overlay */}
+            <div className="relative w-24 h-24 mx-auto group cursor-pointer" onClick={triggerFileInput}>
               <img
                 src={userProfile?.avatarUrl || `https://api.dicebear.com/7.x/bottts/svg?seed=${userProfile?.username}`}
                 alt={userProfile?.displayName}
@@ -316,11 +560,11 @@ export default function ProfileModal({ onClose }) {
             <div className="pt-2 space-y-2">
               <button
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
+                onClick={triggerFileInput}
                 className="w-full py-2.5 px-4 rounded-full text-xs font-medium bg-[#131314] hover:bg-[#282a2c] text-gray-200 border border-neutral-800 transition-all flex items-center justify-center gap-2"
               >
                 <Camera className="w-4 h-4 text-blue-400" />
-                <span>Change Profile Photo</span>
+                <span>Upload Profile Photo</span>
               </button>
 
               <button

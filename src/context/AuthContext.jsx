@@ -195,7 +195,16 @@ export function AuthProvider({ children }) {
   }, [userProfile]);
 
   const updateProfileAvatar = (newUrl) => {
-    setUserProfile(prev => prev ? { ...prev, avatarUrl: newUrl } : null);
+    setUserProfile(prev => {
+      if (!prev) return null;
+      const updated = { ...prev, avatarUrl: newUrl };
+      saveUserToRegistry(updated);
+      return updated;
+    });
+    setCurrentUser(prev => {
+      if (!prev) return null;
+      return { ...prev, avatarUrl: newUrl };
+    });
   };
 
   const fetchUserProfileQuick = async (uid) => {
