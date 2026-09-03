@@ -1,13 +1,12 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Trash2, Menu, Shield, LayoutDashboard } from 'lucide-react';
+import { Menu, Shield, LayoutDashboard } from 'lucide-react';
 
 export default function Header({
   activeChallenge,
   viewMode,
   onToggleAdmin,
-  onToggleMobileSidebar,
-  onClearAll
+  onToggleMobileSidebar
 }) {
   const { userProfile } = useAuth();
 
@@ -68,22 +67,6 @@ export default function Header({
                   <span>Admin Panel</span>
                 </>
               )}
-            </button>
-          )}
-
-          {/* Clear Active Data */}
-          {viewMode !== 'admin' && activeChallenge && (
-            <button
-              onClick={() => {
-                if (window.confirm(`Are you sure you want to clear all topics and notes for "${activeChallenge.name}"?`)) {
-                  onClearAll();
-                }
-              }}
-              className="bg-[#1e1f20] hover:bg-rose-500/10 text-gray-400 hover:text-rose-400 px-3.5 py-1.5 rounded-full text-xs font-medium border border-neutral-800/60 transition-all duration-200 flex items-center gap-1.5 active:scale-95"
-              title="Clear topics/notes for active challenge"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Clear</span>
             </button>
           )}
         </div>

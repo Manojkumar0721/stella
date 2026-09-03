@@ -103,7 +103,6 @@ export default function App() {
           viewMode={viewMode}
           onToggleAdmin={() => { setSelectedFriendUser(null); setViewMode(prev => prev === 'admin' ? 'calendar' : 'admin'); }}
           onToggleMobileSidebar={() => setIsOpenMobileSidebar(prev => !prev)}
-          onClearAll={clearAllData}
         />
 
         {/* Main Content Area */}
