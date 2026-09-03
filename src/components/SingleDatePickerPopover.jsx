@@ -39,9 +39,9 @@ export default function SingleDatePickerPopover({
   const dayGrid = getMonthGridDays(viewYear, viewMonth);
 
   return (
-    <div className="absolute top-full left-0 sm:left-auto mt-2 z-50 w-72 bg-[#1e1f20] border border-neutral-800 rounded-3xl p-4 shadow-2xl space-y-3 animate-fade-in font-sans">
+    <div className="mt-2.5 w-full bg-[#131314] border border-neutral-800 rounded-2xl p-3 sm:p-4 shadow-inner space-y-3 animate-fade-in font-sans">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-neutral-800 pb-2">
+      <div className="flex items-center justify-between border-b border-neutral-800/80 pb-2">
         <div className="flex items-center gap-1.5 text-xs font-bold text-gray-200">
           <CalendarIcon className="w-3.5 h-3.5 text-blue-400" />
           <span>{title}</span>
@@ -60,7 +60,7 @@ export default function SingleDatePickerPopover({
         <button
           type="button"
           onClick={handlePrevMonth}
-          className="p-1.5 text-gray-400 hover:text-white bg-[#131314] rounded-full border border-neutral-800"
+          className="p-1.5 text-gray-400 hover:text-white bg-[#1e1f20] hover:bg-[#282a2c] rounded-full border border-neutral-800 transition-colors"
         >
           <ChevronLeft className="w-3.5 h-3.5" />
         </button>
@@ -73,7 +73,7 @@ export default function SingleDatePickerPopover({
         <button
           type="button"
           onClick={handleNextMonth}
-          className="p-1.5 text-gray-400 hover:text-white bg-[#131314] rounded-full border border-neutral-800"
+          className="p-1.5 text-gray-400 hover:text-white bg-[#1e1f20] hover:bg-[#282a2c] rounded-full border border-neutral-800 transition-colors"
         >
           <ChevronRight className="w-3.5 h-3.5" />
         </button>
@@ -91,7 +91,7 @@ export default function SingleDatePickerPopover({
       {/* Day grid */}
       <div className="grid grid-cols-7 gap-1 text-xs">
         {dayGrid.map((item, idx) => {
-          if (!item) return <div key={`emp-${idx}`} className="h-8"></div>;
+          if (!item) return <div key={`emp-${idx}`} className="h-7 sm:h-8"></div>;
 
           const { dayNumber, dateStr } = item;
           const isSelected = dateStr === selectedDate;
@@ -106,12 +106,12 @@ export default function SingleDatePickerPopover({
                 onSelectDate(dateStr);
                 onClose();
               }}
-              className={`h-8 font-bold rounded-xl transition-all flex items-center justify-center text-xs ${
+              className={`h-7 sm:h-8 font-bold rounded-xl transition-all flex items-center justify-center text-xs ${
                 isSelected
                   ? 'bg-blue-600 text-white font-extrabold shadow-md shadow-blue-500/30 ring-1 ring-blue-400 scale-105'
                   : isDisabled
                   ? 'text-gray-600 opacity-40 cursor-not-allowed'
-                  : 'bg-[#131314] hover:bg-[#282a2c] text-gray-200 hover:text-white border border-neutral-800/40'
+                  : 'bg-[#1e1f20] hover:bg-[#282a2c] text-gray-200 hover:text-white border border-neutral-800/40'
               }`}
             >
               {dayNumber}
@@ -121,8 +121,8 @@ export default function SingleDatePickerPopover({
       </div>
 
       {/* Native date picker option */}
-      <div className="pt-1 border-t border-neutral-800/60 flex items-center justify-between">
-        <span className="text-[10px] text-gray-400">Or use native input:</span>
+      <div className="pt-2 border-t border-neutral-800/80 flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
+        <span className="text-[10px] text-gray-400 font-medium">Or pick date directly:</span>
         <input
           type="date"
           value={selectedDate || ''}
@@ -133,7 +133,7 @@ export default function SingleDatePickerPopover({
               onClose();
             }
           }}
-          className="bg-[#131314] border border-neutral-700/60 text-gray-200 text-xs rounded-lg px-2 py-0.5 focus:outline-none"
+          className="bg-[#1e1f20] border border-neutral-700/60 text-gray-200 text-xs rounded-xl px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500/50 cursor-pointer font-mono"
         />
       </div>
     </div>

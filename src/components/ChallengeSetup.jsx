@@ -19,13 +19,6 @@ export default function ChallengeSetup({ onCreateChallenge, onCancel, hasExistin
     return Math.ceil(diff / (1000 * 60 * 60 * 24)) + 1;
   };
 
-  const formatNiceDate = (dateStr) => {
-    if (!dateStr) return '';
-    const [y, m, d] = dateStr.split('-').map(Number);
-    const dt = new Date(y, m - 1, d);
-    return dt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-  };
-
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!startDate || !endDate) {
@@ -55,7 +48,7 @@ export default function ChallengeSetup({ onCreateChallenge, onCancel, hasExistin
 
   return (
     <div className="min-h-[80vh] flex items-center justify-center p-4 sm:p-6 font-sans">
-      <div className="max-w-xl w-full bg-[#1e1f20] border border-neutral-800/80 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-7 relative overflow-hidden">
+      <div className="max-w-xl w-full bg-[#1e1f20] border border-neutral-800/80 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-7 relative">
         {/* Background Glow */}
         <div className="absolute -top-24 -right-24 w-60 h-60 bg-blue-600/10 rounded-full blur-3xl pointer-events-none"></div>
         <div className="absolute -bottom-24 -left-24 w-60 h-60 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none"></div>
@@ -104,7 +97,7 @@ export default function ChallengeSetup({ onCreateChallenge, onCancel, hasExistin
           </div>
 
           {/* Simple 2-Column Date Selection (Start Date & End Date) */}
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             <div className="flex items-center justify-between text-xs text-gray-300 font-semibold px-0.5">
               <span className="flex items-center gap-1.5">
                 <CalendarIcon className="w-4 h-4 text-blue-400" />
@@ -115,34 +108,47 @@ export default function ChallengeSetup({ onCreateChallenge, onCancel, hasExistin
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Start Date Column */}
-              <div className="space-y-1.5 relative">
-                <label className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1">
-                  <span>Start Date</span>
+              <div className="space-y-2">
+                <label className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider flex items-center justify-between">
+                  <span className="flex items-center gap-1">
+                    <CalendarDays className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Start Date</span>
+                  </span>
+                  <span className="text-[10px] text-gray-400 font-mono font-normal">Step 1</span>
                 </label>
                 
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowStartPicker(!showStartPicker);
-                      setShowEndPicker(false);
-                    }}
-                    className="w-full bg-[#131314] hover:bg-[#282a2c] border border-neutral-800 hover:border-emerald-500/50 rounded-2xl px-4 py-3 text-left transition-all flex items-center justify-between group shadow-sm active:scale-[0.99]"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <CalendarDays className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <span className="text-xs font-bold text-gray-100 truncate font-mono">
-                        {formatNiceDate(startDate) || 'Select Start Date'}
-                      </span>
-                    </div>
-                    <span className="text-[10px] bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-mono font-bold shrink-0">
-                      Pick Date
-                    </span>
-                  </button>
+                <div className="bg-[#131314] border border-neutral-800/90 rounded-2xl p-3 space-y-2 shadow-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          setStartDate(e.target.value);
+                          if (endDate && endDate < e.target.value) {
+                            setEndDate(e.target.value);
+                          }
+                          setErrorMsg('');
+                        }
+                      }}
+                      className="bg-[#1e1f20] border border-neutral-700/60 rounded-xl px-3 py-2 text-xs text-gray-100 font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500/50 w-full cursor-pointer"
+                    />
 
-                  {/* Start Date Popover Calendar */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowStartPicker(!showStartPicker);
+                        setShowEndPicker(false);
+                      }}
+                      className="px-3 py-2 rounded-xl text-xs font-bold bg-emerald-600/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-600 hover:text-white transition-all shrink-0 active:scale-95"
+                    >
+                      {showStartPicker ? 'Hide' : 'Calendar'}
+                    </button>
+                  </div>
+
+                  {/* Inline Start Date Calendar */}
                   {showStartPicker && (
                     <SingleDatePickerPopover
                       selectedDate={startDate}
@@ -161,32 +167,43 @@ export default function ChallengeSetup({ onCreateChallenge, onCancel, hasExistin
               </div>
 
               {/* End Date Column */}
-              <div className="space-y-1.5 relative">
-                <label className="text-[11px] font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-1">
-                  <span>End Date</span>
+              <div className="space-y-2">
+                <label className="text-[11px] font-bold text-indigo-400 uppercase tracking-wider flex items-center justify-between">
+                  <span className="flex items-center gap-1">
+                    <CalendarDays className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>End Date</span>
+                  </span>
+                  <span className="text-[10px] text-gray-400 font-mono font-normal">Step 2</span>
                 </label>
 
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowEndPicker(!showEndPicker);
-                      setShowStartPicker(false);
-                    }}
-                    className="w-full bg-[#131314] hover:bg-[#282a2c] border border-neutral-800 hover:border-indigo-500/50 rounded-2xl px-4 py-3 text-left transition-all flex items-center justify-between group shadow-sm active:scale-[0.99]"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <CalendarDays className="w-4 h-4 text-indigo-400 shrink-0" />
-                      <span className="text-xs font-bold text-gray-100 truncate font-mono">
-                        {formatNiceDate(endDate) || 'Select End Date'}
-                      </span>
-                    </div>
-                    <span className="text-[10px] bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded-full font-mono font-bold shrink-0">
-                      Pick Date
-                    </span>
-                  </button>
+                <div className="bg-[#131314] border border-neutral-800/90 rounded-2xl p-3 space-y-2 shadow-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <input
+                      type="date"
+                      value={endDate}
+                      min={startDate}
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          setEndDate(e.target.value);
+                          setErrorMsg('');
+                        }
+                      }}
+                      className="bg-[#1e1f20] border border-neutral-700/60 rounded-xl px-3 py-2 text-xs text-gray-100 font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500/50 w-full cursor-pointer"
+                    />
 
-                  {/* End Date Popover Calendar */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowEndPicker(!showEndPicker);
+                        setShowStartPicker(false);
+                      }}
+                      className="px-3 py-2 rounded-xl text-xs font-bold bg-indigo-600/20 text-indigo-300 border border-indigo-500/40 hover:bg-indigo-600 hover:text-white transition-all shrink-0 active:scale-95"
+                    >
+                      {showEndPicker ? 'Hide' : 'Calendar'}
+                    </button>
+                  </div>
+
+                  {/* Inline End Date Calendar */}
                   {showEndPicker && (
                     <SingleDatePickerPopover
                       selectedDate={endDate}
